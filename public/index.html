@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin — Pingu Steam</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+
+    <!-- ══════════════════════════════
+         SIDEBAR
+    ══════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon" id="sidebarLogo">🎬</div>
+            <div>
+                <h2 id="sidebarNombre">Pingu Steam</h2>
+                <span>Panel Admin</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">Principal</div>
+                <button class="nav-item active" onclick="goTo('dashboard', this)">
+                    <span class="icon">📊</span> Dashboard
+                </button>
+                <button class="nav-item" onclick="goTo('pedidos', this)">
+                    <span class="icon">🛒</span> Pedidos
+                    <span id="badge-pedidos" style="margin-left:auto;background:var(--accent);color:white;font-size:11px;padding:2px 7px;border-radius:10px;display:none;">0</span>
+                </button>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Inventario</div>
+                <button class="nav-item" onclick="goTo('servicios', this)">
+                    <span class="icon">🎬</span> Servicios
+                </button>
+                <button class="nav-item" onclick="goTo('cuentas', this)">
+                    <span class="icon">🗄️</span> Cuentas
+                </button>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Gestión</div>
+                <button class="nav-item" onclick="goTo('clientes', this)">
+                    <span class="icon">👥</span> Clientes
+                </button>
+                <button class="nav-item" onclick="goTo('ventas', this)">
+                    <span class="icon">💰</span> Ventas
+                </button>
+                <button class="nav-item" onclick="goTo('admins', this)">
+                    <span class="icon">👑</span> Admins
+                </button>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Sistema</div>
+                <button class="nav-item" onclick="goTo('whatsapp', this)">
+                    <span class="icon">📱</span> WhatsApp Bot
+                </button>
+                <button class="nav-item" onclick="goTo('config', this)">
+                    <span class="icon">⚙️</span> Configuración
+                </button>
+            </div>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <button class="nav-item" onclick="logout()" style="color:var(--danger)">
+                <span class="icon">🚪</span> Cerrar sesión
+            </button>
+        </div>
+    </aside>
+
+    <!-- ══════════════════════════════
+         TOPBAR
+    ══════════════════════════════ -->
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:16px">
+            <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="display:none" id="menuBtn">☰</button>
+            <h1 class="topbar-title" id="pageTitle">Dashboard</h1>
+        </div>
+        <div class="topbar-right">
+            <div class="status-badge offline" id="waBadge">
+                <span class="dot"></span>
+                <span id="waStatus">Desconectado</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ══════════════════════════════
+         CONTENIDO PRINCIPAL
+    ══════════════════════════════ -->
+    <main class="main">
+
+        <!-- ── DASHBOARD ─────────────────── -->
+        <section class="section active" id="sec-dashboard">
+
+            <!-- Stats rápidas -->
+            <div class="stats-grid">
+                <div class="stat-card" style="--card-color:#6c63ff">
+                    <div class="stat-icon">🛒</div>
+                    <div class="stat-value" id="stat-pedidos">0</div>
+                    <div class="stat-label">Pedidos pendientes</div>
+                </div>
+                <div class="stat-card" style="--card-color:#2ecc71">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="stat-ventas">Bs 0</div>
+                    <div class="stat-label">Ventas hoy</div>
+                </div>
+                <div class="stat-card" style="--card-color:#f6c85f">
+                    <div class="stat-icon">🗄️</div>
+                    <div class="stat-value" id="stat-stock">0</div>
+                    <div class="stat-label">Perfiles disponibles</div>
+                </div>
+                <div class="stat-card" style="--card-color:#ff6584">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="stat-clientes">0</div>
+                    <div class="stat-label">Clientes registrados</div>
+                </div>
+            </div>
+
+            <!-- Tarjetas de servicios estilo imagen referencia -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Servicios disponibles</h2>
+                    <button class="btn btn-primary btn-sm" onclick="goTo('servicios', null)">Ver todos</button>
+                </div>
+                <div class="services-grid" id="dashboardServicios">
+                    <!-- Se llenan con JS -->
+                    <div class="empty-state" style="grid-column:1/-1">
+                        <span class="empty-icon">🎬</span>
+                        <p>Cargando servicios...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Últimos pedidos -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Últimos pedidos</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="goTo('pedidos', null)">Ver todos</button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th>Servicio</th>
+                                <th>Estado</th>
+                                <th>Fecha</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaUltimosPedidos">
+                            <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-dim)">Sin pedidos aún</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── PEDIDOS ────────────────────── -->
+        <section class="section" id="sec-pedidos">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Pedidos</h2>
+                    <div style="display:flex;gap:8px">
+                        <select class="form-control" style="width:auto;padding:6px 12px" id="filtroPedidos" onchange="cargarPedidos()">
+                            <option value="pendiente">Pendientes</option>
+                            <option value="atendido">Atendidos</option>
+                            <option value="cancelado">Cancelados</option>
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Cliente</th><th>WhatsApp</th><th>Servicio</th><th>Método pago</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr>
+                        </thead>
+                        <tbody id="tablaPedidos">
+                            <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-dim)">Sin pedidos</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── SERVICIOS ──────────────────── -->
+        <section class="section" id="sec-servicios">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Servicios de streaming</h2>
+                    <button class="btn btn-primary" onclick="abrirModalServicio()">+ Agregar servicio</button>
+                </div>
+                <div class="services-grid" id="gridServicios">
+                    <div class="empty-state" style="grid-column:1/-1">
+                        <span class="empty-icon">🎬</span>
+                        <p>No hay servicios configurados</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── CUENTAS ────────────────────── -->
+        <section class="section" id="sec-cuentas">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Cuentas de streaming</h2>
+                    <button class="btn btn-primary" onclick="abrirModalCuenta()">+ Agregar cuenta</button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Servicio</th><th>Correo</th><th>Tipo</th><th>Perfiles libres</th><th>Estado</th><th>Acciones</th></tr>
+                        </thead>
+                        <tbody id="tablaCuentas">
+                            <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-dim)">Sin cuentas</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── CLIENTES ───────────────────── -->
+        <section class="section" id="sec-clientes">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Clientes</h2>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Nombre</th><th>WhatsApp</th><th>Registrado</th><th>Acciones</th></tr>
+                        </thead>
+                        <tbody id="tablaClientes">
+                            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-dim)">Sin clientes</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── VENTAS ─────────────────────── -->
+        <section class="section" id="sec-ventas">
+            <div class="stats-grid" style="margin-bottom:20px">
+                <div class="stat-card" style="--card-color:#2ecc71">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="totalVentasHoy">Bs 0</div>
+                    <div class="stat-label">Ventas hoy</div>
+                </div>
+                <div class="stat-card" style="--card-color:#6c63ff">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-value" id="totalVentasMes">Bs 0</div>
+                    <div class="stat-label">Ventas este mes</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h2 class="card-title">Historial de ventas</h2></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Cliente</th><th>Servicio / Perfil</th><th>Precio</th><th>Fecha</th></tr>
+                        </thead>
+                        <tbody id="tablaVentas">
+                            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-dim)">Sin ventas aún</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── ADMINS ─────────────────────── -->
+        <section class="section" id="sec-admins">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Administradores</h2>
+                    <button class="btn btn-primary" onclick="abrirModalAdmin()">+ Agregar admin</button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Usuario</th><th>Teléfono</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr>
+                        </thead>
+                        <tbody id="tablaAdmins">
+                            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-dim)">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── WHATSAPP BOT ───────────────── -->
+        <section class="section" id="sec-whatsapp">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">Estado del bot</h2></div>
+                    <div class="qr-container" id="qrContainer">
+                        <span style="font-size:48px">📱</span>
+                        <p>Esperando conexión...</p>
+                        <p style="font-size:12px">El QR aparecerá aquí cuando el bot esté iniciando</p>
+                    </div>
+                    <div style="margin-top:16px;display:flex;gap:8px">
+                        <button class="btn btn-primary" onclick="reconectarBot()">🔄 Reconectar</button>
+                        <button class="btn btn-danger" onclick="desconectarBot()">🔌 Desconectar</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">Info de conexión</h2></div>
+                    <div style="display:flex;flex-direction:column;gap:12px">
+                        <div style="display:flex;justify-content:space-between;padding:12px;background:var(--bg-dark);border-radius:10px">
+                            <span style="color:var(--text-muted)">Estado</span>
+                            <span id="infoEstado" class="badge badge-red">Desconectado</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:12px;background:var(--bg-dark);border-radius:10px">
+                            <span style="color:var(--text-muted)">Número admin</span>
+                            <span id="infoNumero" style="font-family:monospace">—</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:12px;background:var(--bg-dark);border-radius:10px">
+                            <span style="color:var(--text-muted)">Mensajes hoy</span>
+                            <span id="infoMensajes">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── CONFIGURACIÓN ──────────────── -->
+        <section class="section" id="sec-config">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">Empresa</h2></div>
+                    <div class="form-group">
+                        <label>Nombre de la empresa</label>
+                        <input type="text" class="form-control" id="cfg-nombre-empresa" placeholder="Pingu Steam">
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre del bot</label>
+                        <input type="text" class="form-control" id="cfg-nombre-bot" placeholder="PinguBot">
+                    </div>
+                    <div class="form-group">
+                        <label>Moneda</label>
+                        <input type="text" class="form-control" id="cfg-moneda" placeholder="Bs">
+                    </div>
+                    <button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar cambios</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">Logo de la empresa</h2></div>
+                    <div id="logoPreview" style="margin-bottom:16px;text-align:center">
+                        <div style="width:100px;height:100px;border-radius:16px;background:var(--bg-dark);display:inline-flex;align-items:center;justify-content:center;font-size:40px;border:2px dashed var(--border)">🎬</div>
+                    </div>
+                    <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="subirLogo(this)">
+                    <button class="btn btn-ghost" onclick="document.getElementById('logoInput').click()">📤 Subir logo</button>
+                </div>
+
+                <div class="card" style="grid-column:1/-1">
+                    <div class="card-header"><h2 class="card-title">Métodos de pago</h2></div>
+                    <div id="listaPagos" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+                        <div class="empty-state"><span class="empty-icon">💳</span><p>Sin métodos configurados</p></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="abrirModalPago()">+ Agregar método de pago</button>
+                </div>
+
+                <div class="card" style="grid-column:1/-1">
+                    <div class="card-header"><h2 class="card-title">Saludo del bot (IA)</h2></div>
+                    <div class="form-group">
+                        <label>Prompt del sistema para la IA</label>
+                        <textarea class="form-control" id="cfg-prompt" rows="5" placeholder="Eres {bot}, asistente de {empresa}. Ayudas a los clientes a comprar servicios de streaming..."></textarea>
+                        <p style="font-size:12px;color:var(--text-dim);margin-top:6px">Usa {bot} y {empresa} como variables dinámicas</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar</button>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ══════════════════════════════
+     MODALES
+══════════════════════════════ -->
+
+<!-- Modal: Agregar Servicio -->
+<div class="modal-overlay" id="modalServicio">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Agregar servicio</h2>
+            <button class="modal-close" onclick="cerrarModal('modalServicio')">✕</button>
+        </div>
+        <div class="form-group">
+            <label>Nombre del servicio</label>
+            <input type="text" class="form-control" id="svc-nombre" placeholder="Netflix">
+        </div>
+        <div class="form-group">
+            <label>Descripción (opcional)</label>
+            <input type="text" class="form-control" id="svc-descripcion" placeholder="Plataforma de streaming de video">
+        </div>
+        <div class="form-group">
+            <label>Imagen de portada</label>
+            <input type="file" class="form-control" id="svc-imagen" accept="image/*">
+            <p style="font-size:12px;color:var(--text-dim);margin-top:4px">Recomendado: 800×600px</p>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-ghost" onclick="cerrarModal('modalServicio')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarServicio()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agregar Cuenta -->
+<div class="modal-overlay" id="modalCuenta">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Agregar cuenta</h2>
+            <button class="modal-close" onclick="cerrarModal('modalCuenta')">✕</button>
+        </div>
+        <div class="form-group">
+            <label>Servicio</label>
+            <select class="form-control" id="cuenta-servicio"></select>
+        </div>
+        <div class="form-group">
+            <label>Correo</label>
+            <input type="email" class="form-control" id="cuenta-correo" placeholder="cuenta@ejemplo.com">
+        </div>
+        <div class="form-group">
+            <label>Contraseña</label>
+            <input type="text" class="form-control" id="cuenta-password" placeholder="contraseña">
+        </div>
+        <div class="form-group">
+            <label>Tipo de venta</label>
+            <select class="form-control" id="cuenta-tipo">
+                <option value="perfil">Por perfil (cuenta compartida)</option>
+                <option value="pantalla_completa">Pantalla completa</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-ghost" onclick="cerrarModal('modalCuenta')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCuenta()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agregar Admin -->
+<div class="modal-overlay" id="modalAdmin">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Agregar administrador</h2>
+            <button class="modal-close" onclick="cerrarModal('modalAdmin')">✕</button>
+        </div>
+        <div class="form-group">
+            <label>Nombre de usuario</label>
+            <input type="text" class="form-control" id="admin-usuario" placeholder="Juan">
+        </div>
+        <div class="form-group">
+            <label>Número WhatsApp (con código de país)</label>
+            <input type="text" class="form-control" id="admin-telefono" placeholder="59175801614">
+        </div>
+        <div class="form-group">
+            <label>Rol</label>
+            <select class="form-control" id="admin-rol">
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super Admin</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-ghost" onclick="cerrarModal('modalAdmin')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarAdmin()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Método de pago -->
+<div class="modal-overlay" id="modalPago">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Agregar método de pago</h2>
+            <button class="modal-close" onclick="cerrarModal('modalPago')">✕</button>
+        </div>
+        <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" class="form-control" id="pago-nombre" placeholder="QR Banco BCP">
+        </div>
+        <div class="form-group">
+            <label>Tipo</label>
+            <select class="form-control" id="pago-tipo">
+                <option value="qr">QR</option>
+                <option value="cuenta">Número de cuenta</option>
+                <option value="yape">Yape</option>
+                <option value="efectivo">Efectivo</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Detalle (número de cuenta, alias, etc.)</label>
+            <input type="text" class="form-control" id="pago-detalle" placeholder="Nro. cuenta: 1234-5678">
+        </div>
+        <div class="form-group">
+            <label>Imagen QR (opcional)</label>
+            <input type="file" class="form-control" id="pago-imagen" accept="image/*">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-ghost" onclick="cerrarModal('modalPago')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarPago()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db     = require('../../db/database');
 
 // GET /api/servicios
-router.get('/', (req, res) => {
+router.get('/', (_req, res) => {
     const servicios = db.prepare(`
         SELECT s.*,
                COUNT(CASE WHEN p.estado = 'libre' THEN 1 END) as libres
@@ -21,6 +21,14 @@ router.post('/', (req, res) => {
     if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
     const result = db.prepare('INSERT INTO servicios (nombre, descripcion, imagen) VALUES (?, ?, ?)').run(nombre, descripcion || null, imagen || null);
     res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+// POST /api/servicios/:id/imagen
+router.post('/:id/imagen', (req, res) => {
+    const { imagen } = req.body;
+    if (!imagen) return res.status(400).json({ error: 'Imagen requerida' });
+    db.prepare('UPDATE servicios SET imagen = ? WHERE id = ?').run(imagen, req.params.id);
+    res.json({ ok: true });
 });
 
 // DELETE /api/servicios/:id

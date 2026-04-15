@@ -1,262 +1,301 @@
 // =============================================
 // PINGU STEAM V2 — app.js
-// Lógica del panel admin
 // =============================================
-
-// ── NAVEGACIÓN ────────────────────────────
-const pageTitles = {
-    dashboard: 'Dashboard',
-    pedidos:   'Pedidos',
-    servicios: 'Servicios',
-    cuentas:   'Cuentas',
-    clientes:  'Clientes',
-    ventas:    'Ventas',
-    admins:    'Administradores',
-    whatsapp:  'WhatsApp Bot',
-    config:    'Configuración'
-};
-
-function goTo(seccion, btn) {
-    // Ocultar todas las secciones
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
-    // Mostrar la sección elegida
-    document.getElementById('sec-' + seccion).classList.add('active');
-    document.getElementById('pageTitle').textContent = pageTitles[seccion] || seccion;
-
-    if (btn) btn.classList.add('active');
-
-    // Cargar datos según sección
-    const loaders = {
-        dashboard: cargarDashboard,
-        pedidos:   cargarPedidos,
-        servicios: cargarServicios,
-        cuentas:   cargarCuentas,
-        clientes:  cargarClientes,
-        ventas:    cargarVentas,
-        admins:    cargarAdmins,
-        config:    cargarConfig
-    };
-
-    if (loaders[seccion]) loaders[seccion]();
-}
 
 // ── API HELPER ────────────────────────────
 async function api(path, method = 'GET', body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch('/api' + path, opts);
-    return res.json();
+    try {
+        const res = await fetch('/api' + path, opts);
+        return res.json();
+    } catch (e) {
+        console.error('API error:', e);
+        return {};
+    }
 }
 
-// ── INICIALIZACIÓN ────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-    cargarDashboard();
-    cargarNombreEmpresa();
-    initSocketIO();
-});
+// ── AUTENTICACIÓN ─────────────────────────
+async function processLogin() {
+    const pass = document.getElementById('loginPass').value;
+    const res  = await api('/auth/login', 'POST', { password: pass });
+    if (res.ok) {
+        document.getElementById('auth-container').style.display = 'none';
+        document.getElementById('app-container').style.display = 'block';
+        cargarNombreEmpresa();
+        openHub();
+        initSocket();
+    } else {
+        document.getElementById('loginError').style.display = 'block';
+    }
+}
 
+function logout() {
+    document.getElementById('app-container').style.display = 'none';
+    document.getElementById('auth-container').style.display = 'flex';
+}
+
+// ── EMPRESA ───────────────────────────────
 async function cargarNombreEmpresa() {
-    const data = await api('/config/public');
-    if (data.nombre_empresa) {
-        document.getElementById('sidebarNombre').textContent = data.nombre_empresa;
-        document.title = `Panel — ${data.nombre_empresa}`;
+    const d = await api('/config/public');
+    if (d.nombre_empresa) {
+        document.getElementById('navLogo').textContent  = d.nombre_empresa;
+        document.getElementById('loginLogo').textContent = d.nombre_empresa;
+        document.title = `Panel — ${d.nombre_empresa}`;
     }
-    if (data.logo) {
-        document.getElementById('sidebarLogo').innerHTML =
-            `<img src="/img/${data.logo}" style="width:42px;height:42px;border-radius:12px;object-fit:cover">`;
+    if (d.logo) {
+        document.getElementById('logoPreview').innerHTML =
+            `<img src="/img/${d.logo}" alt="logo">`;
     }
+    // Rellenar campos de config
+    if (d.nombre_empresa) document.getElementById('cfgNombreEmpresa').value = d.nombre_empresa;
+    if (d.nombre_bot)     document.getElementById('cfgNombreBot').value     = d.nombre_bot;
+    if (d.moneda)         document.getElementById('cfgMoneda').value         = d.moneda;
+    if (d.prompt_sistema) document.getElementById('cfgPrompt').value         = d.prompt_sistema;
 }
 
-// ── SOCKET.IO (WhatsApp status en tiempo real) ──
-function initSocketIO() {
+// ── NAVEGACIÓN ────────────────────────────
+function openHub() {
+    // Subir el slider de vuelta al piso del hub
+    document.getElementById('main-nav').style.display = 'none';
+    document.getElementById('view-slider').classList.remove('in-panel');
+    // Resetear scroll del contenido para la próxima vez
+    document.getElementById('content-slide').scrollTop = 0;
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+}
+
+function enterPanel(viewId) {
+    // Bajar el slider al piso de contenido
+    document.getElementById('main-nav').style.display = 'flex';
+    document.getElementById('view-slider').classList.add('in-panel');
+    switchView(viewId);
+}
+
+function switchView(viewId) {
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    document.getElementById('content-slide').scrollTop = 0;
+
+    const btnId = 'btn-' + viewId.replace('-view', '');
+    const btn   = document.getElementById(btnId);
+    if (btn) btn.classList.add('active');
+
+    // Cargar datos según sección
+    const loaders = {
+        'dashboard-view': cargarDashboard,
+        'pedidos-view':   () => cargarPedidos('pendiente'),
+        'servicios-view': cargarServicios,
+        'clientes-view':  cargarClientes,
+        'ventas-view':    cargarVentas,
+        'admins-view':    cargarAdmins,
+        'config-view':    cargarConfig,
+        'bot-view':       cargarBotStats
+    };
+    if (loaders[viewId]) loaders[viewId]();
+}
+
+// ── SOCKET.IO ─────────────────────────────
+function initSocket() {
     if (typeof io === 'undefined') return;
     const socket = io();
 
-    socket.on('qr', (qr) => {
-        const container = document.getElementById('qrContainer');
-        if (!container) return;
-        import('https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js').then(() => {
-            QRCode.toDataURL(qr, { width: 220 }, (err, url) => {
-                if (!err) container.innerHTML = `<img src="${url}" alt="QR"><p>Escanea con WhatsApp</p>`;
-            });
-        }).catch(() => {
-            container.innerHTML = `<p style="word-break:break-all;font-size:10px">${qr}</p><p>Escanea el QR</p>`;
-        });
+    socket.on('qr', (qrData) => {
+        // Mostrar QR como imagen usando la API de Google Charts (sin dependencia extra)
+        const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+        document.getElementById('qrBox').innerHTML = `<img src="${url}" alt="QR"><p>Escanea con WhatsApp</p>`;
     });
 
     socket.on('connection-status', (status) => {
-        const badge = document.getElementById('waBadge');
-        const statusText = document.getElementById('waStatus');
-        const infoEstado = document.getElementById('infoEstado');
+        const pill   = document.getElementById('waPill');
+        const waText = document.getElementById('waStatus');
+        const badge  = document.getElementById('botBadge');
 
-        badge.className = 'status-badge';
-        if (status === 'connected') {
-            badge.classList.add('online');
-            badge.style.cssText = '';
-            statusText.textContent = 'Conectado';
-            if (infoEstado) { infoEstado.className = 'badge badge-green'; infoEstado.textContent = 'Conectado'; }
-        } else if (status === 'connecting') {
-            badge.classList.add('connecting');
-            statusText.textContent = 'Conectando...';
-            if (infoEstado) { infoEstado.className = 'badge badge-yellow'; infoEstado.textContent = 'Conectando...'; }
-        } else {
-            badge.classList.add('offline');
-            statusText.textContent = 'Desconectado';
-            if (infoEstado) { infoEstado.className = 'badge badge-red'; infoEstado.textContent = 'Desconectado'; }
+        pill.className = 'status-pill ' + (status === 'connected' ? 'connected' : status === 'connecting' ? 'connecting' : 'disconnected');
+
+        const labels = { connected: 'Conectado', connecting: 'Conectando...', disconnected: 'Desconectado' };
+        waText.textContent = labels[status] || status;
+
+        if (badge) {
+            badge.className = 'badge ' + (status === 'connected' ? 'active' : status === 'connecting' ? 'pending' : 'closed');
+            badge.textContent = labels[status] || status;
         }
     });
 }
 
 // ── DASHBOARD ─────────────────────────────
 async function cargarDashboard() {
-    const stats = await api('/stats');
-    if (stats.pedidosPendientes !== undefined) {
-        document.getElementById('stat-pedidos').textContent = stats.pedidosPendientes;
-        document.getElementById('stat-ventas').textContent = `Bs ${stats.ventasHoy || 0}`;
-        document.getElementById('stat-stock').textContent = stats.perfilesLibres || 0;
-        document.getElementById('stat-clientes').textContent = stats.totalClientes || 0;
+    const [stats, servicios, pedidos] = await Promise.all([
+        api('/stats'),
+        api('/servicios'),
+        api('/pedidos?limit=5&estado=pendiente')
+    ]);
 
-        const badge = document.getElementById('badge-pedidos');
-        if (stats.pedidosPendientes > 0) {
-            badge.textContent = stats.pedidosPendientes;
-            badge.style.display = 'inline-block';
-        }
+    document.getElementById('stat-pedidos').textContent  = stats.pedidosPendientes || 0;
+    document.getElementById('stat-ventas').textContent   = `Bs ${stats.ventasHoy || 0}`;
+    document.getElementById('stat-stock').textContent    = stats.perfilesLibres || 0;
+    document.getElementById('stat-clientes').textContent = stats.totalClientes || 0;
+
+    const badge = document.getElementById('nav-badge-pedidos');
+    if (stats.pedidosPendientes > 0) {
+        badge.textContent    = stats.pedidosPendientes;
+        badge.style.display  = 'inline-flex';
+    } else {
+        badge.style.display = 'none';
     }
 
-    // Servicios en cards
-    const servicios = await api('/servicios');
     renderDashboardServicios(servicios);
-
-    // Últimos pedidos
-    const pedidos = await api('/pedidos?limit=5');
     renderTabla('tablaUltimosPedidos', pedidos, renderFilaPedidoCompacta, 6);
 }
 
 function renderDashboardServicios(servicios) {
-    const grid = document.getElementById('dashboardServicios');
-    if (!servicios || servicios.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-            <span class="empty-icon">🎬</span>
-            <p>Agrega servicios en la sección <strong>Servicios</strong></p>
-        </div>`;
+    const grid = document.getElementById('dashServicios');
+    if (!servicios?.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">🎬</span><p>Agrega servicios en <strong>Catálogo</strong></p></div>`;
         return;
     }
-
-    grid.innerHTML = servicios.map(s => {
-        const stockClass = s.libres === 0 ? 'empty' : s.libres <= 2 ? 'low' : 'ok';
-        const stockLabel = s.libres === 0 ? 'Sin stock' : `${s.libres} disponible${s.libres > 1 ? 's' : ''}`;
-        const bg = s.imagen
-            ? `<img class="bg" src="/img/servicios/${s.imagen}" alt="${s.nombre}" onerror="this.style.display='none'">`
-            : '';
-        const placeholder = !s.imagen
-            ? `<div class="bg-placeholder">🎬</div>` : '';
-
-        return `<div class="service-card" onclick="goTo('cuentas', null)">
-            ${placeholder}${bg}
-            <div class="overlay"></div>
-            <div class="content">
-                <div class="svc-name">${s.nombre}</div>
-                <span class="svc-stock ${stockClass}">${stockLabel}</span>
-            </div>
-        </div>`;
-    }).join('');
+    grid.innerHTML = servicios.map(s => renderServiceCard(s, false)).join('');
 }
 
 // ── PEDIDOS ───────────────────────────────
-async function cargarPedidos() {
-    const filtro = document.getElementById('filtroPedidos')?.value || 'pendiente';
-    const pedidos = await api(`/pedidos?estado=${filtro}`);
+async function cargarPedidos(estado = 'pendiente') {
+    const pedidos = await api(`/pedidos?estado=${estado}`);
     renderTabla('tablaPedidos', pedidos, renderFilaPedido, 8);
 }
 
 function renderFilaPedido(p) {
-    const estadoBadge = {
-        pendiente: 'badge-yellow', atendido: 'badge-green', cancelado: 'badge-red'
-    }[p.estado] || 'badge-gray';
+    const cls = { pendiente: 'pending', atendido: 'active', cancelado: 'closed' }[p.estado] || 'info';
     return `<tr>
         <td>#${p.id}</td>
         <td>${p.cliente_nombre || '—'}</td>
-        <td style="font-family:monospace">${p.whatsapp || '—'}</td>
+        <td><a href="https://wa.me/${p.whatsapp}" target="_blank" style="color:var(--accent)">${p.whatsapp || '—'}</a></td>
         <td>${p.servicio_nombre || '—'}</td>
         <td>${p.metodo_pago || '—'}</td>
-        <td><span class="badge ${estadoBadge}">${p.estado}</span></td>
-        <td style="font-size:12px;color:var(--text-dim)">${formatFecha(p.creado_en)}</td>
-        <td>
-            ${p.estado === 'pendiente' ? `<button class="btn btn-primary btn-sm" onclick="atenderPedido(${p.id})">Atender</button>` : ''}
-            <a href="https://wa.me/${p.whatsapp}" target="_blank" class="btn btn-ghost btn-sm">💬</a>
+        <td><span class="badge ${cls}">${p.estado}</span></td>
+        <td style="font-size:12px;color:var(--text-muted)">${formatFecha(p.creado_en)}</td>
+        <td style="display:flex;gap:6px">
+            ${p.estado === 'pendiente' ? `<button class="neon-btn btn-sm" onclick="atenderPedido(${p.id})">Atender</button>` : ''}
+            <a href="https://wa.me/${p.whatsapp}" target="_blank" class="neon-btn btn-sm btn-outline">💬</a>
         </td>
     </tr>`;
 }
 
 function renderFilaPedidoCompacta(p) {
-    const estadoBadge = { pendiente: 'badge-yellow', atendido: 'badge-green', cancelado: 'badge-red' }[p.estado] || 'badge-gray';
+    const cls = { pendiente: 'pending', atendido: 'active', cancelado: 'closed' }[p.estado] || 'info';
     return `<tr>
         <td>#${p.id}</td>
         <td>${p.cliente_nombre || '—'}</td>
+        <td style="font-family:monospace;font-size:12px">${p.whatsapp || '—'}</td>
         <td>${p.servicio_nombre || '—'}</td>
-        <td><span class="badge ${estadoBadge}">${p.estado}</span></td>
-        <td style="font-size:12px;color:var(--text-dim)">${formatFecha(p.creado_en)}</td>
-        <td><a href="https://wa.me/${p.whatsapp}" target="_blank" class="btn btn-ghost btn-sm">💬</a></td>
+        <td><span class="badge ${cls}">${p.estado}</span></td>
+        <td><a href="https://wa.me/${p.whatsapp}" target="_blank" class="neon-btn btn-sm btn-outline">💬</a></td>
     </tr>`;
 }
 
 async function atenderPedido(id) {
     await api(`/pedidos/${id}/atender`, 'POST');
-    cargarPedidos();
+    cargarPedidos('pendiente');
     cargarDashboard();
 }
 
-// ── SERVICIOS ─────────────────────────────
+// ── CATÁLOGO / SERVICIOS ──────────────────
 async function cargarServicios() {
-    const servicios = await api('/servicios');
-    const grid = document.getElementById('gridServicios');
-
-    if (!servicios || servicios.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-            <span class="empty-icon">🎬</span><p>Sin servicios. Agrega uno para empezar.</p>
-        </div>`;
-        return;
-    }
-
-    grid.innerHTML = servicios.map(s => {
-        const stockClass = s.libres === 0 ? 'empty' : s.libres <= 2 ? 'low' : 'ok';
-        const bg = s.imagen ? `<img class="bg" src="/img/servicios/${s.imagen}" onerror="this.style.display='none'">` : '';
-        const placeholder = !s.imagen ? `<div class="bg-placeholder">🎬</div>` : '';
-        return `<div class="service-card">
-            ${placeholder}${bg}
-            <div class="overlay"></div>
-            <div class="content">
-                <div class="svc-name">${s.nombre}</div>
-                <span class="svc-stock ${stockClass}">${s.libres} disponibles</span>
-            </div>
-            <button onclick="eliminarServicio(${s.id})" style="position:absolute;top:10px;right:10px;background:rgba(255,0,0,0.4);border:none;color:white;border-radius:8px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>
-        </div>`;
-    }).join('');
+    const [servicios, cuentas] = await Promise.all([api('/servicios'), api('/cuentas')]);
+    renderGridServicios(servicios);
+    renderTabla('tablaCuentas', cuentas, renderFilaCuenta, 6);
 }
 
-function abrirModalServicio() { abrirModal('modalServicio'); }
+function renderGridServicios(servicios) {
+    const grid = document.getElementById('gridServicios');
+    if (!servicios?.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">🎬</span><p>Sin servicios. Agrega uno para empezar.</p></div>`;
+        return;
+    }
+    grid.innerHTML = servicios.map(s => renderServiceCard(s, true)).join('');
+}
+
+function renderServiceCard(s, editable) {
+    const libres = s.libres ?? 0;
+    const stockCls   = libres === 0 ? 'empty' : libres <= 2 ? 'low' : 'ok';
+    const stockLabel = libres === 0 ? '🔴 Sin stock' : `🟢 ${libres} disponible${libres !== 1 ? 's' : ''}`;
+
+    // Imagen de fondo
+    const bgStyle = s.imagen
+        ? `background-image:url('/img/servicios/${s.imagen}');background-size:cover;background-position:center`
+        : '';
+    const placeholder = s.imagen ? '' : `<span style="position:relative;z-index:1">🎬</span>`;
+
+    const editBtns = editable ? `
+        <button class="upload-btn" onclick="event.stopPropagation();abrirCambiarImagen(${s.id})">🖼️ Imagen</button>
+        <button onclick="event.stopPropagation();eliminarServicio(${s.id})"
+            style="position:absolute;top:10px;left:10px;z-index:10;background:rgba(255,51,102,0.5);border:none;color:white;border-radius:8px;padding:3px 9px;cursor:pointer;font-size:12px;display:none"
+            class="del-btn">✕</button>` : '';
+
+    return `<div class="glass-panel cinematic-card"
+        onmouseenter="this.querySelectorAll('.upload-btn,.del-btn').forEach(b=>b.style.display='block')"
+        onmouseleave="this.querySelectorAll('.upload-btn,.del-btn').forEach(b=>b.style.display='none')">
+        <div class="card-img" style="${bgStyle}">
+            ${placeholder}
+            ${editBtns}
+        </div>
+        <div class="card-content">
+            <span class="card-tag">Streaming</span>
+            <h3>${s.nombre}</h3>
+            <p>${s.descripcion || 'Servicio de streaming'}</p>
+            <div class="card-action">
+                <span class="card-stock ${stockCls}">${stockLabel}</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+// Abrir modal para cambiar imagen de un servicio existente
+function abrirCambiarImagen(id) {
+    document.getElementById('imgSvcId').value = id;
+    document.getElementById('imgSvcPreview').style.display = 'none';
+    document.getElementById('imgSvcInput').value = '';
+    abrirModal('modalImagenServicio');
+}
+
+async function subirImagenServicio() {
+    const id    = document.getElementById('imgSvcId').value;
+    const input = document.getElementById('imgSvcInput');
+    if (!input.files[0]) return alert('Selecciona una imagen primero');
+
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    form.append('carpeta', 'servicios');
+
+    const up = await fetch('/api/media/upload?carpeta=servicios', { method: 'POST', body: form });
+    const data = await up.json();
+    if (!data.filename) return alert('Error subiendo imagen');
+
+    await api(`/servicios/${id}/imagen`, 'POST', { imagen: data.filename });
+    cerrarModal('modalImagenServicio');
+    cargarServicios();
+}
 
 async function guardarServicio() {
-    const nombre = document.getElementById('svc-nombre').value.trim();
-    const descripcion = document.getElementById('svc-descripcion').value.trim();
-    const imagenInput = document.getElementById('svc-imagen');
-
+    const nombre = document.getElementById('svcNombre').value.trim();
     if (!nombre) return alert('El nombre es obligatorio');
 
     let imagen = null;
-    if (imagenInput.files[0]) {
+    const input = document.getElementById('svcImgInput');
+    if (input.files[0]) {
         const form = new FormData();
-        form.append('file', imagenInput.files[0]);
-        form.append('carpeta', 'servicios');
-        const up = await fetch('/api/media/upload', { method: 'POST', body: form });
-        const upData = await up.json();
-        if (upData.filename) imagen = upData.filename;
+        form.append('file', input.files[0]);
+        const up   = await fetch('/api/media/upload?carpeta=servicios', { method: 'POST', body: form });
+        const data = await up.json();
+        if (data.filename) imagen = data.filename;
     }
 
-    await api('/servicios', 'POST', { nombre, descripcion, imagen });
+    await api('/servicios', 'POST', { nombre, descripcion: document.getElementById('svcDesc').value.trim(), imagen });
     cerrarModal('modalServicio');
+    document.getElementById('svcNombre').value = '';
+    document.getElementById('svcDesc').value   = '';
+    input.value = '';
+    document.getElementById('svcImgPreview').style.display = 'none';
     cargarServicios();
 }
 
@@ -267,52 +306,51 @@ async function eliminarServicio(id) {
 }
 
 // ── CUENTAS ───────────────────────────────
-async function cargarCuentas() {
-    const cuentas = await api('/cuentas');
-    renderTabla('tablaCuentas', cuentas, renderFilaCuenta, 6);
-}
-
 function renderFilaCuenta(c) {
     const libres = c.perfiles_libres || 0;
-    const stockClass = libres === 0 ? 'badge-red' : libres <= 2 ? 'badge-yellow' : 'badge-green';
+    const cls    = libres === 0 ? 'closed' : libres <= 2 ? 'pending' : 'active';
     return `<tr>
         <td>${c.servicio_nombre || '—'}</td>
-        <td style="font-family:monospace">${c.correo}</td>
+        <td style="font-family:monospace;font-size:13px">${c.correo}</td>
+        <td style="font-family:monospace;font-size:13px">${c.contrasena}</td>
         <td>${c.tipo}</td>
-        <td><span class="badge ${stockClass}">${libres} libres</span></td>
-        <td><span class="badge ${c.activa ? 'badge-green' : 'badge-red'}">${c.activa ? 'Activa' : 'Inactiva'}</span></td>
-        <td>
-            <button class="btn btn-ghost btn-sm" onclick="verPerfiles(${c.id})">Perfiles</button>
-            <button class="btn btn-danger btn-sm" onclick="eliminarCuenta(${c.id})">✕</button>
+        <td><span class="badge ${cls}">${libres} libres</span></td>
+        <td style="display:flex;gap:6px">
+            <button class="neon-btn btn-sm btn-outline" onclick="verPerfiles(${c.id})">Perfiles</button>
+            <button class="neon-btn btn-sm btn-danger" onclick="eliminarCuenta(${c.id})">✕</button>
         </td>
     </tr>`;
 }
 
 function abrirModalCuenta() {
-    api('/servicios').then(servicios => {
-        const sel = document.getElementById('cuenta-servicio');
-        sel.innerHTML = servicios.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+    api('/servicios').then(s => {
+        document.getElementById('cuentaServicio').innerHTML =
+            s.map(sv => `<option value="${sv.id}">${sv.nombre}</option>`).join('');
     });
     abrirModal('modalCuenta');
 }
 
 async function guardarCuenta() {
     const data = {
-        servicio_id: parseInt(document.getElementById('cuenta-servicio').value),
-        correo:      document.getElementById('cuenta-correo').value.trim(),
-        contrasena:  document.getElementById('cuenta-password').value.trim(),
-        tipo:        document.getElementById('cuenta-tipo').value
+        servicio_id: parseInt(document.getElementById('cuentaServicio').value),
+        correo:      document.getElementById('cuentaCorreo').value.trim(),
+        contrasena:  document.getElementById('cuentaPass').value.trim(),
+        tipo:        document.getElementById('cuentaTipo').value
     };
-    if (!data.correo || !data.contrasena) return alert('Correo y contraseña son obligatorios');
+    if (!data.correo || !data.contrasena) return alert('Completa todos los campos');
     await api('/cuentas', 'POST', data);
     cerrarModal('modalCuenta');
-    cargarCuentas();
+    cargarServicios();
 }
 
 async function eliminarCuenta(id) {
     if (!confirm('¿Eliminar esta cuenta?')) return;
     await api(`/cuentas/${id}`, 'DELETE');
-    cargarCuentas();
+    cargarServicios();
+}
+
+async function verPerfiles(_id) {
+    alert('Módulo de perfiles — próximamente 🚧');
 }
 
 // ── CLIENTES ──────────────────────────────
@@ -321,25 +359,23 @@ async function cargarClientes() {
     renderTabla('tablaClientes', clientes, c => `<tr>
         <td>#${c.id}</td>
         <td>${c.nombre || '—'}</td>
-        <td style="font-family:monospace">${c.whatsapp}</td>
-        <td style="font-size:12px;color:var(--text-dim)">${formatFecha(c.registrado_en)}</td>
-        <td><a href="https://wa.me/${c.whatsapp}" target="_blank" class="btn btn-ghost btn-sm">💬 Escribir</a></td>
+        <td style="font-family:monospace"><a href="https://wa.me/${c.whatsapp}" target="_blank" style="color:var(--accent)">${c.whatsapp}</a></td>
+        <td style="font-size:12px;color:var(--text-muted)">${formatFecha(c.registrado_en)}</td>
+        <td><a href="https://wa.me/${c.whatsapp}" target="_blank" class="neon-btn btn-sm btn-outline">💬 Escribir</a></td>
     </tr>`, 5);
 }
 
 // ── VENTAS ────────────────────────────────
 async function cargarVentas() {
     const data = await api('/ventas');
-    if (data.resumen) {
-        document.getElementById('totalVentasHoy').textContent = `Bs ${data.resumen.hoy || 0}`;
-        document.getElementById('totalVentasMes').textContent = `Bs ${data.resumen.mes || 0}`;
-    }
+    document.getElementById('ventasHoy').textContent = `Bs ${data.resumen?.hoy || 0}`;
+    document.getElementById('ventasMes').textContent = `Bs ${data.resumen?.mes || 0}`;
     renderTabla('tablaVentas', data.ventas || [], v => `<tr>
         <td>#${v.id}</td>
         <td>${v.cliente_nombre || '—'}</td>
         <td>${v.servicio_nombre || '—'} / ${v.nombre_perfil || '—'}</td>
-        <td style="color:var(--success)">Bs ${v.precio}</td>
-        <td style="font-size:12px;color:var(--text-dim)">${formatFecha(v.fecha)}</td>
+        <td style="color:var(--success);font-weight:600">Bs ${v.precio}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${formatFecha(v.fecha)}</td>
     </tr>`, 5);
 }
 
@@ -347,23 +383,21 @@ async function cargarVentas() {
 async function cargarAdmins() {
     const data = await api('/admins');
     renderTabla('tablaAdmins', data.admins || [], a => `<tr>
-        <td>${a.usuario}</td>
+        <td style="font-weight:600">${a.usuario}</td>
         <td style="font-family:monospace">${a.telefono}</td>
-        <td><span class="badge ${a.rol === 'super_admin' ? 'badge-purple' : 'badge-gray'}">${a.rol}</span></td>
-        <td><span class="badge ${a.activo ? 'badge-green' : 'badge-red'}">${a.activo ? 'Activo' : 'Inactivo'}</span></td>
-        <td>${a.rol !== 'super_admin' ? `<button class="btn btn-danger btn-sm" onclick="eliminarAdmin('${a.usuario}')">Eliminar</button>` : ''}</td>
+        <td><span class="badge ${a.rol === 'super_admin' ? 'info' : 'pending'}">${a.rol}</span></td>
+        <td><span class="badge ${a.activo ? 'active' : 'closed'}">${a.activo ? 'Activo' : 'Inactivo'}</span></td>
+        <td>${a.rol !== 'super_admin' ? `<button class="neon-btn btn-sm btn-danger" onclick="eliminarAdmin('${a.usuario}')">Eliminar</button>` : '—'}</td>
     </tr>`, 5);
 }
 
-function abrirModalAdmin() { abrirModal('modalAdmin'); }
-
 async function guardarAdmin() {
     const data = {
-        usuario:  document.getElementById('admin-usuario').value.trim(),
-        telefono: document.getElementById('admin-telefono').value.trim(),
-        rol:      document.getElementById('admin-rol').value
+        usuario:  document.getElementById('adminUsuario').value.trim(),
+        telefono: document.getElementById('adminTelefono').value.trim(),
+        rol:      document.getElementById('adminRol').value
     };
-    if (!data.usuario || !data.telefono) return alert('Usuario y teléfono son obligatorios');
+    if (!data.usuario || !data.telefono) return alert('Completa todos los campos');
     const res = await api('/admins', 'POST', data);
     if (res.error) return alert(res.error);
     cerrarModal('modalAdmin');
@@ -372,83 +406,108 @@ async function guardarAdmin() {
 
 async function eliminarAdmin(usuario) {
     if (!confirm(`¿Eliminar al admin ${usuario}?`)) return;
-    await api(`/admins/${usuario}`, 'DELETE');
+    const res = await api(`/admins/${usuario}`, 'DELETE');
+    if (res.error) return alert(res.error);
     cargarAdmins();
 }
 
+// ── BOT ───────────────────────────────────
+async function cargarBotStats() {
+    const stats = await api('/stats');
+    if (document.getElementById('botClientes'))
+        document.getElementById('botClientes').textContent = stats.totalClientes || 0;
+    if (document.getElementById('botNumero'))
+        document.getElementById('botNumero').textContent = process?.env?.ADMIN_NUMBER || '—';
+}
+
+async function reconectarBot() { await api('/bot/reconnect', 'POST'); }
+
 // ── CONFIGURACIÓN ─────────────────────────
 async function cargarConfig() {
-    const data = await api('/config/public');
-    if (data.nombre_empresa) document.getElementById('cfg-nombre-empresa').value = data.nombre_empresa;
-    if (data.nombre_bot)     document.getElementById('cfg-nombre-bot').value = data.nombre_bot;
-    if (data.moneda)         document.getElementById('cfg-moneda').value = data.moneda;
-    if (data.prompt_sistema) document.getElementById('cfg-prompt').value = data.prompt_sistema;
-    if (data.logo) {
-        document.getElementById('logoPreview').innerHTML =
-            `<img src="/img/${data.logo}" style="width:100px;height:100px;border-radius:16px;object-fit:cover">`;
-    }
+    await cargarNombreEmpresa();
+    const pagos = await api('/pagos');
+    renderPagos(pagos);
 }
 
 async function guardarConfig() {
     const data = {
-        nombre_empresa:  document.getElementById('cfg-nombre-empresa').value.trim(),
-        nombre_bot:      document.getElementById('cfg-nombre-bot').value.trim(),
-        moneda:          document.getElementById('cfg-moneda').value.trim(),
-        prompt_sistema:  document.getElementById('cfg-prompt').value.trim()
+        nombre_empresa: document.getElementById('cfgNombreEmpresa').value.trim(),
+        nombre_bot:     document.getElementById('cfgNombreBot').value.trim(),
+        moneda:         document.getElementById('cfgMoneda').value,
+        prompt_sistema: document.getElementById('cfgPrompt').value.trim()
     };
     await api('/config', 'POST', data);
     cargarNombreEmpresa();
-    alert('✅ Configuración guardada');
+    mostrarToast('✅ Configuración guardada');
 }
 
 async function subirLogo(input) {
     if (!input.files[0]) return;
     const form = new FormData();
     form.append('file', input.files[0]);
-    form.append('tipo', 'logo');
-    const res = await fetch('/api/media/logo', { method: 'POST', body: form });
+    const res  = await fetch('/api/media/logo', { method: 'POST', body: form });
     const data = await res.json();
     if (data.filename) {
         document.getElementById('logoPreview').innerHTML =
-            `<img src="/img/${data.filename}" style="width:100px;height:100px;border-radius:16px;object-fit:cover">`;
+            `<img src="/img/${data.filename}" alt="logo">`;
         await api('/config', 'POST', { logo: data.filename });
         cargarNombreEmpresa();
+        mostrarToast('✅ Logo actualizado');
     }
 }
 
-// Métodos de pago
-function abrirModalPago() { abrirModal('modalPago'); }
+// ── PAGOS ─────────────────────────────────
+function renderPagos(pagos) {
+    const grid = document.getElementById('listaPagos');
+    if (!pagos?.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>`;
+        return;
+    }
+    grid.innerHTML = pagos.map(p => `
+        <div class="glass-panel pago-card">
+            <button class="delete-btn" onclick="eliminarPago(${p.id})">✕</button>
+            <span class="pago-tipo">${p.tipo}</span>
+            <h3>${p.nombre}</h3>
+            <p class="pago-detalle">${p.detalle || ''}</p>
+            ${p.imagen ? `<img src="/img/qr/${p.imagen}" class="qr-preview" alt="QR">` : ''}
+        </div>`
+    ).join('');
+}
 
 async function guardarPago() {
     const data = {
-        nombre:  document.getElementById('pago-nombre').value.trim(),
-        tipo:    document.getElementById('pago-tipo').value,
-        detalle: document.getElementById('pago-detalle').value.trim()
+        nombre:  document.getElementById('pagoNombre').value.trim(),
+        tipo:    document.getElementById('pagoTipo').value,
+        detalle: document.getElementById('pagoDetalle').value.trim()
     };
-    const imagenInput = document.getElementById('pago-imagen');
-    if (imagenInput.files[0]) {
+    if (!data.nombre) return alert('El nombre es obligatorio');
+
+    const input = document.getElementById('pagoQRInput');
+    if (input.files[0]) {
         const form = new FormData();
-        form.append('file', imagenInput.files[0]);
-        form.append('carpeta', 'qr');
-        const up = await fetch('/api/media/upload', { method: 'POST', body: form });
-        const upData = await up.json();
-        if (upData.filename) data.imagen = upData.filename;
+        form.append('file', input.files[0]);
+        const up   = await fetch('/api/media/upload?carpeta=qr', { method: 'POST', body: form });
+        const upd  = await up.json();
+        if (upd.filename) data.imagen = upd.filename;
     }
+
     await api('/pagos', 'POST', data);
     cerrarModal('modalPago');
     cargarConfig();
 }
 
-// Bot
-async function reconectarBot() { await api('/bot/reconnect', 'POST'); }
-async function desconectarBot() { if (confirm('¿Desconectar el bot?')) await api('/bot/disconnect', 'POST'); }
+async function eliminarPago(id) {
+    if (!confirm('¿Eliminar este método de pago?')) return;
+    await api(`/pagos/${id}`, 'DELETE');
+    cargarConfig();
+}
 
 // ── UTILIDADES ────────────────────────────
 function renderTabla(tbodyId, items, renderFila, colspan) {
     const tbody = document.getElementById(tbodyId);
     if (!tbody) return;
-    if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:32px;color:var(--text-dim)">Sin datos</td></tr>`;
+    if (!items?.length) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:36px;color:var(--text-muted)">Sin datos</td></tr>`;
         return;
     }
     tbody.innerHTML = items.map(renderFila).join('');
@@ -459,16 +518,47 @@ function formatFecha(iso) {
     return new Date(iso).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function previsualizarImagen(input, previewId) {
+    const preview = document.getElementById(previewId);
+    if (!input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        preview.src          = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
 function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
 
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
-
-function logout() { window.location.href = '/logout'; }
+function mostrarToast(msg) {
+    const t = document.createElement('div');
+    t.textContent = msg;
+    Object.assign(t.style, {
+        position: 'fixed', bottom: '24px', right: '24px', zIndex: 999,
+        background: 'rgba(0,229,255,0.15)', border: '1px solid var(--accent)',
+        color: 'white', padding: '12px 20px', borderRadius: '12px',
+        backdropFilter: 'blur(8px)', fontSize: '14px', fontWeight: '600',
+        animation: 'fadeIn 0.3s ease'
+    });
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
 
 // Cerrar modales al click fuera
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => {
-        if (e.target === overlay) overlay.classList.remove('open');
+document.addEventListener('click', e => {
+    if (e.target.classList.contains('modal-overlay')) {
+        e.target.classList.remove('open');
+    }
+});
+
+// Inicialización: cargar nombre de empresa en login
+window.addEventListener('DOMContentLoaded', () => {
+    api('/config/public').then(d => {
+        if (d.nombre_empresa) {
+            document.getElementById('loginLogo').textContent = d.nombre_empresa;
+            document.title = `Panel — ${d.nombre_empresa}`;
+        }
     });
 });

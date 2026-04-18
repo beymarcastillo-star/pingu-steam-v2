@@ -349,7 +349,46 @@
             </div>
         </div>
 
-        <!-- Fila 2: Métodos de Pago -->
+        <!-- Fila 2: Probar IA + Historial -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+
+            <!-- Probar IA -->
+            <div class="glass-panel" style="padding:28px;display:flex;flex-direction:column;gap:12px">
+                <h3 style="margin:0">🤖 Probar IA</h3>
+                <p style="color:var(--text-muted);font-size:13px;margin:0">Escribe un mensaje y ve cómo responde el bot antes de usarlo con clientes</p>
+                <textarea id="testIAInput" rows="3" placeholder="Ej: ¿Cuánto cuesta Netflix?" style="resize:vertical"></textarea>
+                <button class="neon-btn" onclick="probarIA()">Enviar mensaje de prueba</button>
+                <div id="testIAOutput" style="display:none;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--text-muted)"></div>
+            </div>
+
+            <!-- Historial resumen -->
+            <div class="glass-panel" style="padding:28px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <h3 style="margin:0">💬 Conversaciones recientes</h3>
+                    <span id="convBadge" style="font-size:12px;color:var(--text-muted)">0 contactos</span>
+                </div>
+                <div id="listaConversaciones" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto">
+                    <p style="color:var(--text-muted);font-size:13px">Sin conversaciones aún</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal hilo de conversación -->
+        <div class="modal-overlay" id="modalHilo">
+            <div class="modal" style="max-width:520px;max-height:80vh;display:flex;flex-direction:column">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="hiloTitulo">Conversación</h2>
+                    <button class="modal-close" onclick="cerrarModal('modalHilo')">✕</button>
+                </div>
+                <div id="hiloMensajes" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 0"></div>
+                <div class="modal-footer" style="justify-content:space-between">
+                    <button class="neon-btn btn-outline btn-sm" id="hiloBorrarBtn" onclick="borrarHilo()">🗑 Borrar historial</button>
+                    <button class="neon-btn btn-outline" onclick="cerrarModal('modalHilo')">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fila 3: Métodos de Pago -->
         <div class="glass-panel" style="margin-top:24px;padding:28px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
                 <div>

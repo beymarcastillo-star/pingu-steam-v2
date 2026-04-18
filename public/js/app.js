@@ -141,6 +141,11 @@ function initSocket() {
         document.getElementById('qrBox').innerHTML = `<img src="${url}" alt="QR"><p>Escanea con WhatsApp</p>`;
     });
 
+    socket.on('nueva-conversacion', () => {
+        // Refrescar lista si el bot-view está visible
+        if (document.getElementById('listaConversaciones')) cargarConversaciones();
+    });
+
     socket.on('connection-status', (status) => {
         const pill   = document.getElementById('waPill');
         const waText = document.getElementById('waStatus');
@@ -711,6 +716,7 @@ async function cargarBotStats() {
         document.getElementById('botMetodos').textContent = pagos?.length || 0;
 
     renderPagosBot(pagos);
+    cargarConversaciones();
 
     // También cargar prompt si no está cargado aún
     if (config.prompt_sistema && !document.getElementById('cfgPrompt').value)
@@ -740,6 +746,95 @@ function tipoLabel(tipo) {
 }
 
 async function reconectarBot() { await api('/bot/reconnect', 'POST'); }
+
+// ── PROBAR IA ──────────────────────────────
+async function probarIA() {
+    const input  = document.getElementById('testIAInput');
+    const output = document.getElementById('testIAOutput');
+    const msg    = input.value.trim();
+    if (!msg) return;
+
+    output.style.display = 'block';
+    output.textContent   = '⏳ Pensando...';
+
+    const res = await api('/bot/test-ia', 'POST', { mensaje: msg });
+    output.textContent = res.respuesta || res.error || 'Sin respuesta';
+}
+
+// ── HISTORIAL DE CONVERSACIONES ────────────
+let _hiloNumeroActual = null;
+
+async function cargarConversaciones() {
+    const rows = await api('/conversaciones');
+    const lista = document.getElementById('listaConversaciones');
+    const badge = document.getElementById('convBadge');
+    if (!lista) return;
+
+    if (!badge) return;
+    badge.textContent = `${rows?.length || 0} contactos`;
+
+    if (!rows?.length) {
+        lista.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Sin conversaciones aún</p>';
+        return;
+    }
+
+    lista.innerHTML = rows.map(r => {
+        const hora  = new Date(r.ultima_fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        const icono = r.ultimo_origen === 'bot' ? '🤖' : '👤';
+        const estadoBadge = r.estado === 'humano'
+            ? '<span style="font-size:10px;background:var(--warning);color:#000;padding:1px 6px;border-radius:8px;margin-left:6px">humano</span>'
+            : '';
+        return `
+        <div onclick="verHilo('${r.numero}','${(r.nombre||r.numero).replace(/'/g,"\\'")}\')"
+             style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.04);transition:background 0.2s"
+             onmouseover="this.style.background='rgba(255,255,255,0.08)'"
+             onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+            <div style="width:38px;height:38px;border-radius:50%;background:var(--glass-border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
+                ${r.nombre?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:white">${r.nombre || r.numero}${estadoBadge}</div>
+                <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icono} ${r.ultimo_mensaje}</div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);flex-shrink:0">${hora}</div>
+        </div>`;
+    }).join('');
+}
+
+async function verHilo(numero, nombre) {
+    _hiloNumeroActual = numero;
+    document.getElementById('hiloTitulo').textContent = `${nombre} · ${numero}`;
+    document.getElementById('hiloBorrarBtn').dataset.numero = numero;
+
+    const msgs = await api(`/conversaciones/${numero}`);
+    const cont  = document.getElementById('hiloMensajes');
+
+    cont.innerHTML = msgs.map(m => {
+        const esBot  = m.origen === 'bot';
+        const hora   = new Date(m.fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        return `
+        <div style="display:flex;flex-direction:column;align-items:${esBot ? 'flex-end' : 'flex-start'}">
+            <div style="max-width:80%;padding:8px 12px;border-radius:${esBot ? '14px 14px 4px 14px' : '14px 14px 14px 4px'};
+                        background:${esBot ? 'var(--primary)' : 'rgba(255,255,255,0.08)'};
+                        font-size:13px;line-height:1.5;white-space:pre-wrap">
+                ${m.mensaje}
+            </div>
+            <span style="font-size:10px;color:var(--text-muted);margin-top:2px">${esBot ? '🤖 Bot' : '👤 Cliente'} · ${hora}</span>
+        </div>`;
+    }).join('');
+
+    // Scroll al final
+    setTimeout(() => cont.scrollTop = cont.scrollHeight, 50);
+    abrirModal('modalHilo');
+}
+
+async function borrarHilo() {
+    const numero = _hiloNumeroActual;
+    if (!numero || !confirm('¿Borrar el historial de esta conversación?')) return;
+    await api(`/conversaciones/${numero}`, 'DELETE');
+    cerrarModal('modalHilo');
+    cargarConversaciones();
+}
 
 // ── CONFIGURACIÓN ─────────────────────────
 async function cargarConfig() {

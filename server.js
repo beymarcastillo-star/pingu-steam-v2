@@ -34,7 +34,8 @@ app.use('/api/ventas',    require('./src/api/routes/ventas'));
 app.use('/api/stats',     require('./src/api/routes/stats'));
 app.use('/api/media',     require('./src/api/routes/media'));
 app.use('/api/pagos',     require('./src/api/routes/pagos'));
-app.use('/api/bot',       require('./src/api/routes/bot'));
+app.use('/api/bot',            require('./src/api/routes/bot'));
+app.use('/api/conversaciones', require('./src/api/routes/conversaciones'));
 
 // Fallback: servir index.html para rutas no API
 app.get('*', (req, res) => {

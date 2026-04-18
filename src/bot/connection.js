@@ -159,4 +159,8 @@ function reconectar() {
     setTimeout(() => conectar(ioRef), 1000);
 }
 
-module.exports = { conectar, enviar, desconectar, reconectar };
+function emitirAdmin(evento, dato) {
+    if (ioRef) ioRef.emit(evento, dato);
+}
+
+module.exports = { conectar, enviar, desconectar, reconectar, emitirAdmin };

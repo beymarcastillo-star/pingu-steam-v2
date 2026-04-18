@@ -7,6 +7,17 @@ const path = require('path');
 
 const IMG_PATH = path.join(__dirname, '../../../public/img');
 
+function logMensaje(db, numero, nombre, mensaje, origen, estado = 'auto') {
+    try {
+        db.prepare(`INSERT INTO conversaciones (numero, nombre, mensaje, origen, estado)
+                    VALUES (?, ?, ?, ?, ?)`).run(numero, nombre, mensaje, origen, estado);
+        // Lazy require para evitar dependencia circular con connection.js
+        const { emitirAdmin } = require('../connection');
+        emitirAdmin('nueva-conversacion', { numero, nombre, mensaje, origen, estado,
+            fecha: new Date().toISOString() });
+    } catch (_) {}
+}
+
 // Sesiones en memoria: { estado, servicioId, servicioNombre, cantidad, pedidoId }
 const sesiones = {};
 
@@ -159,10 +170,21 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
     const sesion  = getSesion(numero);
     const t       = texto.toLowerCase().trim();
 
+    // Loguear mensaje del cliente
+    if (texto) logMensaje(db, numero, nombre, texto, 'cliente',
+        sesion.estado === 'humano' ? 'humano' : 'auto');
+
+    // Wrapper que envía y loguea la respuesta del bot
+    const responder = async (msg) => {
+        await enviar(sock, jid, msg);
+        logMensaje(db, numero, nombre, msg, 'bot',
+            sesion.estado === 'humano' ? 'humano' : 'auto');
+    };
+
     // ── COMANDOS GLOBALES (funcionan en cualquier estado) ─────────────────
     if (['menu', 'inicio', 'start', '/start'].includes(t)) {
         resetSesion(numero);
-        return enviar(sock, jid, msgMenu(db, nombre));
+        return responder(msgMenu(db, nombre));
     }
 
     if (['mis puntos', 'puntos', 'mis pts'].includes(t)) {
@@ -176,19 +198,19 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
             msg += `Acumula *${falta > 0 ? falta : 0} puntos más* para obtener tu primer descuento 💪\n\n`;
             msg += `_Ganas puntos en cada compra que realices._`;
         }
-        return enviar(sock, jid, msg);
+        return responder(msg);
     }
 
     if (['catalogo', 'catálogo', 'ver', 'servicios'].includes(t)) {
         const servicios = getServicios(db);
         setSesion(numero, { estado: 'catalogo', servicios });
-        return enviar(sock, jid, msgCatalogo(servicios));
+        return responder(msgCatalogo(servicios));
     }
 
     // ── ESTADO: INICIO ────────────────────────────────────────────────────
     if (sesion.estado === 'inicio') {
         setSesion(numero, { estado: 'menu' });
-        return enviar(sock, jid, msgMenu(db, nombre));
+        return responder(msgMenu(db, nombre));
     }
 
     // ── ESTADO: MENU ──────────────────────────────────────────────────────
@@ -196,194 +218,141 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
         if (t === '1') {
             const servicios = getServicios(db);
             setSesion(numero, { estado: 'catalogo', servicios });
-            return enviar(sock, jid, msgCatalogo(servicios));
+            return responder(msgCatalogo(servicios));
         }
         if (t === '2') {
-            // Reusar lógica de puntos — cambiar estado y responder
             const pts = cliente?.puntos || 0;
             const msg = pts >= 50
                 ? `⭐ Tienes *${pts} puntos*!\n🎁 Escribe *canjear* para aplicar un descuento.`
                 : `⭐ Tienes *${pts} puntos*.\nAcumula ${50 - pts} más para tu primer descuento 💪`;
             setSesion(numero, { estado: 'menu' });
-            return enviar(sock, jid, msg);
+            return responder(msg);
         }
         if (t === '3') {
             notificarAdmin(sock, db, `📞 Cliente *${nombre}* (${numero}) quiere hablar con un humano.`);
             setSesion(numero, { estado: 'humano' });
-            return enviar(sock, jid, '👤 ¡Claro! Ya le avisé a un asesor. En breve te contactamos 😊\n\nEscribe *menu* si deseas volver al menú.');
+            return responder('👤 ¡Claro! Ya le avisé a un asesor. En breve te contactamos 😊\n\nEscribe *menu* si deseas volver al menú.');
         }
-        // Texto libre → IA
     }
 
-    // ── ESTADO: CATÁLOGO — el cliente elige un servicio ───────────────────
+    // ── ESTADO: CATÁLOGO ─────────────────────────────────────────────────
     if (sesion.estado === 'catalogo') {
         const servicios = sesion.servicios || getServicios(db);
-
-        // Buscar por número
         const idx = parseInt(t) - 1;
         let elegido = (!isNaN(idx) && idx >= 0) ? servicios[idx] : null;
-
-        // Buscar por nombre si no encontró por número
-        if (!elegido) {
-            elegido = servicios.find(s => s.nombre.toLowerCase().includes(t));
-        }
+        if (!elegido) elegido = servicios.find(s => s.nombre.toLowerCase().includes(t));
 
         if (elegido) {
             if (elegido.libres <= 0) {
                 notificarAdmin(sock, db, `⚠️ Cliente *${nombre}* (${numero}) pidió *${elegido.nombre}* pero no hay stock.`);
                 setSesion(numero, { estado: 'menu' });
-                return enviar(sock, jid,
-                    `😔 Lamentablemente *${elegido.nombre}* no tiene stock ahora mismo.\n` +
-                    `Te avisaremos cuando haya disponibilidad 🙏\n\n¿Quieres ver otro servicio? Escribe *catalogo*`
-                );
+                return responder(`😔 Lamentablemente *${elegido.nombre}* no tiene stock ahora mismo.\nTe avisaremos cuando haya disponibilidad 🙏\n\n¿Quieres ver otro servicio? Escribe *catalogo*`);
             }
             setSesion(numero, { estado: 'cantidad', servicioId: elegido.id, servicioNombre: elegido.nombre, servicio: elegido });
-            return enviar(sock, jid,
-                `${msgDetalle(elegido, 1)}\n\n` +
-                `¿*Cuántas cuentas* deseas? Escribe el número 👇\n` +
-                `_(Lleva 2+ y obtienes descuento 🎁)_`
-            );
+            return responder(`${msgDetalle(elegido, 1)}\n\n¿*Cuántas cuentas* deseas? Escribe el número 👇\n_(Lleva 2+ y obtienes descuento 🎁)_`);
         }
-        // No encontró servicio → IA con contexto de catálogo
     }
 
-    // ── ESTADO: CANTIDAD ───────────────────────────────────────────────────
+    // ── ESTADO: CANTIDAD ──────────────────────────────────────────────────
     if (sesion.estado === 'cantidad') {
         const cant = parseInt(t);
         if (!isNaN(cant) && cant >= 1 && cant <= 20) {
             const s = sesion.servicio;
             setSesion(numero, { cantidad: cant });
-
             const metodos = getMetodosPago(db);
-            const resumen = msgDetalle(s, cant);
             setSesion(numero, { estado: 'pago', metodos });
-            return enviar(sock, jid, `${resumen}\n\n${msgMetodosPago(metodos)}`);
+            return responder(`${msgDetalle(s, cant)}\n\n${msgMetodosPago(metodos)}`);
         }
         if (t === 'cancelar' || t === 'no') {
             resetSesion(numero);
-            return enviar(sock, jid, '✅ Sin problema. ¿En qué más te puedo ayudar?\n\nEscribe *menu* para volver al inicio.');
+            return responder('✅ Sin problema. ¿En qué más te puedo ayudar?\n\nEscribe *menu* para volver al inicio.');
         }
-        return enviar(sock, jid, '¿Cuántas cuentas deseas? Solo escribe el número (ej: *1*, *2*, *3*...)');
+        return responder('¿Cuántas cuentas deseas? Solo escribe el número (ej: *1*, *2*, *3*...)');
     }
 
-    // ── ESTADO: PAGO ───────────────────────────────────────────────────────
+    // ── ESTADO: PAGO ──────────────────────────────────────────────────────
     if (sesion.estado === 'pago') {
         const metodos = sesion.metodos || getMetodosPago(db);
         const idx = parseInt(t) - 1;
         const metodo = metodos[idx] || metodos.find(m => m.nombre.toLowerCase().includes(t));
 
         if (metodo) {
-            // Calcular total final
             const s    = sesion.servicio;
             const cant = sesion.cantidad || 1;
             const { pct } = calcularDescuento(cant);
-            const precioUnitario = s.precio_usd ? +(s.precio_usd * (1 - pct / 100)).toFixed(2) : null;
-            const precioUnitarioBs = s.precio_bs ? +(s.precio_bs * (1 - pct / 100)).toFixed(2) : null;
-            const totalUsd = precioUnitario ? +(precioUnitario * cant).toFixed(2) : null;
+            const precioUnitario   = s.precio_usd ? +(s.precio_usd * (1 - pct / 100)).toFixed(2) : null;
+            const precioUnitarioBs = s.precio_bs  ? +(s.precio_bs  * (1 - pct / 100)).toFixed(2) : null;
+            const totalUsd = precioUnitario   ? +(precioUnitario   * cant).toFixed(2) : null;
             const totalBs  = precioUnitarioBs ? +(precioUnitarioBs * cant).toFixed(2) : null;
 
-            // Crear pedido en la DB
-            const pedido = db.prepare(`
-                INSERT INTO pedidos (cliente_id, servicio_id, metodo_pago, notas)
-                VALUES (?, ?, ?, ?)
-            `).run(
-                cliente.id,
-                s.id,
-                metodo.nombre,
-                `${cant}x ${s.nombre} | Total: $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}`
-            );
+            const pedido = db.prepare(`INSERT INTO pedidos (cliente_id, servicio_id, metodo_pago, notas)
+                VALUES (?, ?, ?, ?)`).run(cliente.id, s.id, metodo.nombre,
+                `${cant}x ${s.nombre} | Total: $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}`);
 
             setSesion(numero, { estado: 'comprobante', pedidoId: pedido.lastInsertRowid, totalBs, totalUsd });
 
-            let resumen = `✅ *Resumen del pedido #${pedido.lastInsertRowid}*\n`;
-            resumen += `🎬 ${cant}x ${s.nombre}\n`;
+            let resumen = `✅ *Resumen del pedido #${pedido.lastInsertRowid}*\n🎬 ${cant}x ${s.nombre}\n`;
             if (totalUsd) resumen += `💰 Total: *$${totalUsd} / Bs ${totalBs}*\n`;
             resumen += `💳 Método: *${metodo.nombre}*`;
 
-            notificarAdmin(sock, db,
-                `🛒 Nuevo pedido #${pedido.lastInsertRowid}\n` +
-                `👤 Cliente: ${nombre} (${numero})\n` +
-                `🎬 ${cant}x ${s.nombre}\n` +
-                `💰 Total: $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}\n` +
-                `💳 Método: ${metodo.nombre}`
-            );
+            notificarAdmin(sock, db, `🛒 Nuevo pedido #${pedido.lastInsertRowid}\n👤 ${nombre} (${numero})\n🎬 ${cant}x ${s.nombre}\n💰 $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}\n💳 ${metodo.nombre}`);
 
-            // Si el método tiene imagen QR, enviarla con el monto como caption
             if (metodo.imagen) {
                 const imgFile = path.join(IMG_PATH, 'qr', metodo.imagen);
                 if (fs.existsSync(imgFile)) {
                     const caption = `${resumen}\n\n📸 Escanea este QR para pagar\n\n_Luego envíame el comprobante (captura de pantalla)_`;
                     await sock.sendMessage(jid, { image: fs.readFileSync(imgFile), caption });
+                    logMensaje(db, numero, nombre, caption, 'bot');
                     return;
                 }
             }
 
-            // Sin imagen: enviar texto con instrucciones
             let instrucciones = resumen + '\n\n';
             if (metodo.detalle) instrucciones += `📋 *Datos de pago:*\n${metodo.detalle}\n\n`;
             instrucciones += `📸 Por favor *envía el comprobante de pago* (imagen o captura) para confirmar tu pedido.`;
-            return enviar(sock, jid, instrucciones);
+            return responder(instrucciones);
         }
 
-        return enviar(sock, jid, `Por favor elige el método de pago escribiendo su *número*:\n\n${msgMetodosPago(metodos)}`);
+        return responder(`Por favor elige el método de pago escribiendo su *número*:\n\n${msgMetodosPago(metodos)}`);
     }
 
-    // ── ESTADO: COMPROBANTE ────────────────────────────────────────────────
+    // ── ESTADO: COMPROBANTE ───────────────────────────────────────────────
     if (sesion.estado === 'comprobante') {
-        // Verificar si hay imagen en el mensaje (lo verifica connection.js antes de llamar acá)
-        // también aceptamos texto de confirmación
         const confirma = ['ya pagué', 'ya pague', 'pagué', 'pague', 'listo', 'hecho', 'ya envié', 'ya envie'].some(k => t.includes(k));
-
         if (sesion._tieneImagen || confirma) {
             const pts = sumarPuntos(db, cliente.id, sesion.totalBs || 0);
             if (sesion.pedidoId) {
-                db.prepare("UPDATE pedidos SET notas = notas || ' | Comprobante recibido' WHERE id = ?")
-                  .run(sesion.pedidoId);
+                db.prepare("UPDATE pedidos SET notas = notas || ' | Comprobante recibido' WHERE id = ?").run(sesion.pedidoId);
             }
-            notificarAdmin(sock, db,
-                `💸 Comprobante recibido del pedido #${sesion.pedidoId}\n` +
-                `👤 ${nombre} (${numero})\n` +
-                `Por favor verificar y entregar acceso.`
-            );
+            notificarAdmin(sock, db, `💸 Comprobante recibido del pedido #${sesion.pedidoId}\n👤 ${nombre} (${numero})\nPor favor verificar y entregar acceso.`);
             resetSesion(numero);
-            return enviar(sock, jid,
-                `✅ ¡Comprobante recibido! Un asesor verificará tu pago y te enviará los accesos en breve 🚀\n\n` +
-                `⭐ *+${pts} puntos* agregados a tu cuenta por esta compra!\n\n` +
-                `Escribe *mis puntos* para ver tu saldo 😊`
-            );
+            return responder(`✅ ¡Comprobante recibido! Un asesor verificará tu pago y te enviará los accesos en breve 🚀\n\n⭐ *+${pts} puntos* agregados a tu cuenta!\n\nEscribe *mis puntos* para ver tu saldo 😊`);
         }
-
-        return enviar(sock, jid,
-            '📸 Envía la imagen del comprobante de pago para confirmar tu pedido.\n' +
-            'Si ya pagaste, escribe *ya pagué*.'
-        );
+        return responder('📸 Envía la imagen del comprobante de pago para confirmar tu pedido.\nSi ya pagaste, escribe *ya pagué*.');
     }
 
-    // ── ESTADO: HUMANO (esperando que admin atienda) ───────────────────────
+    // ── ESTADO: HUMANO ────────────────────────────────────────────────────
     if (sesion.estado === 'humano') {
-        // Reenviar el mensaje al admin como relay
         notificarAdmin(sock, db, `💬 Mensaje de *${nombre}* (${numero}):\n"${texto}"`);
-        return; // No responder automáticamente, el admin lo hace desde su WA
-    }
-
-    // ── FALLBACK: Gemini AI ────────────────────────────────────────────────
-    await sock.sendPresenceUpdate('composing', jid);
-    const respuesta = await aiService.chat(texto, numero);
-
-    // Si Gemini detecta intención de compra, redirigir al catálogo
-    if (respuesta.includes('[NOTIFY_ADMIN]')) {
-        notificarAdmin(sock, db, `🤖 IA detectó posible venta — Cliente: ${nombre} (${numero})\nMensaje: "${texto}"`);
-        const clean = respuesta.replace('[NOTIFY_ADMIN]', '').trim();
-        await enviar(sock, jid, clean);
         return;
     }
 
-    // Si llevamos 2+ mensajes en IA sin estado, sugerir el menú
+    // ── FALLBACK: Gemini AI ───────────────────────────────────────────────
+    await sock.sendPresenceUpdate('composing', jid);
+    const respuesta = await aiService.chat(texto, numero);
+
+    if (respuesta.includes('[NOTIFY_ADMIN]')) {
+        notificarAdmin(sock, db, `🤖 IA detectó posible venta — Cliente: ${nombre} (${numero})\nMensaje: "${texto}"`);
+        const clean = respuesta.replace('[NOTIFY_ADMIN]', '').trim();
+        await responder(clean);
+        return;
+    }
+
     setSesion(numero, { estado: 'menu', _aiTurns: (sesion._aiTurns || 0) + 1 });
-    await enviar(sock, jid, respuesta);
+    await responder(respuesta);
     if ((sesion._aiTurns || 0) >= 2) {
         setSesion(numero, { _aiTurns: 0 });
-        await enviar(sock, jid, `💡 ¿Quieres ver nuestros servicios? Escribe *catalogo* o *1* 😊`);
+        await responder(`💡 ¿Quieres ver nuestros servicios? Escribe *catalogo* o *1* 😊`);
     }
 }
 

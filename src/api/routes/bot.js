@@ -1,5 +1,6 @@
-const router = require('express').Router();
-const bot    = require('../../bot/connection');
+const router    = require('express').Router();
+const bot       = require('../../bot/connection');
+const aiService = require('../../services/aiService');
 
 router.post('/reconnect', (req, res) => {
     bot.reconectar();
@@ -9,6 +10,18 @@ router.post('/reconnect', (req, res) => {
 router.post('/disconnect', (req, res) => {
     bot.desconectar();
     res.json({ ok: true });
+});
+
+// POST /api/bot/test-ia — probar el prompt desde el panel
+router.post('/test-ia', async (req, res) => {
+    const { mensaje } = req.body;
+    if (!mensaje) return res.status(400).json({ error: 'mensaje requerido' });
+    try {
+        const respuesta = await aiService.chat(mensaje, '__panel_test__');
+        res.json({ respuesta: respuesta.replace('[NOTIFY_ADMIN]', '').trim() });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 module.exports = router;

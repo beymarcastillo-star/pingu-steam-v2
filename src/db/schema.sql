@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS metodos_pago (
     activo      INTEGER NOT NULL DEFAULT 1
 );
 
+-- Historial de conversaciones del bot
+CREATE TABLE IF NOT EXISTS conversaciones (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero      TEXT NOT NULL,
+    nombre      TEXT,
+    mensaje     TEXT NOT NULL,
+    origen      TEXT NOT NULL DEFAULT 'cliente', -- 'cliente' | 'bot'
+    estado      TEXT NOT NULL DEFAULT 'auto',    -- 'auto' | 'humano'
+    fecha       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_conv_numero ON conversaciones(numero);
+CREATE INDEX IF NOT EXISTS idx_conv_fecha  ON conversaciones(fecha);
+
 -- Datos iniciales de configuración
 INSERT OR IGNORE INTO config (clave, valor) VALUES
     ('nombre_empresa',  'Pingu Steam'),

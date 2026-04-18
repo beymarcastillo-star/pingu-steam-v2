@@ -13,7 +13,8 @@ router.get('/public', (_req, res) => {
         moneda:         getConfig('moneda'),
         tipo_cambio:    getConfig('tipo_cambio') || '6.96',
         prompt_sistema: getConfig('saludo_bot'),
-        color_primario: getConfig('color_primario')
+        color_primario: getConfig('color_primario'),
+        admin_number:   process.env.ADMIN_NUMBER || null
     });
 });
 

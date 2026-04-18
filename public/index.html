@@ -294,10 +294,12 @@
         <div class="section-header">
             <div>
                 <h1>Integración Bot WhatsApp</h1>
-                <p>Gestiona la conexión y la IA de ventas automáticas</p>
+                <p>Gestiona la conexión, IA y métodos de pago del bot</p>
             </div>
             <span class="badge" id="botBadge" style="font-size:14px;padding:8px 18px">Desconectado</span>
         </div>
+
+        <!-- Fila 1: QR + Config IA -->
         <div class="bot-container">
             <div class="glass-panel bot-status-card">
                 <h3>Vincular Dispositivo</h3>
@@ -310,7 +312,8 @@
                 <div style="margin-top:24px;text-align:left;width:100%">
                     <h4 style="color:var(--text-muted);margin-bottom:12px;font-size:13px">Estadísticas del bot</h4>
                     <p style="margin-bottom:6px;font-size:14px">Número admin: <strong id="botNumero" style="color:white">—</strong></p>
-                    <p style="font-size:14px">Clientes totales: <strong id="botClientes" style="color:var(--success)">0</strong></p>
+                    <p style="margin-bottom:6px;font-size:14px">Clientes totales: <strong id="botClientes" style="color:var(--success)">0</strong></p>
+                    <p style="font-size:14px">Métodos de pago: <strong id="botMetodos" style="color:var(--accent)">0</strong></p>
                 </div>
             </div>
             <div class="glass-panel bot-settings">
@@ -343,6 +346,20 @@
                 <div style="text-align:right;margin-top:8px">
                     <button class="neon-btn" onclick="guardarConfig()">Guardar cambios de IA</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Fila 2: Métodos de Pago -->
+        <div class="glass-panel" style="margin-top:24px;padding:28px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                <div>
+                    <h3 style="margin:0">💳 Métodos de Pago</h3>
+                    <p style="color:var(--text-muted);font-size:13px;margin-top:4px">El bot enviará estos datos (y la imagen QR si existe) al cliente junto con el monto exacto</p>
+                </div>
+                <button class="neon-btn" onclick="abrirModal('modalPago')">+ Agregar método</button>
+            </div>
+            <div class="pagos-grid" id="listaPagosBot">
+                <div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>
             </div>
         </div>
     </main>

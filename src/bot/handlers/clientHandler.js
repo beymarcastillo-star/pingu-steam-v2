@@ -2,6 +2,10 @@
 // HANDLER DE CLIENTES — Flujo de conversación
 // =============================================
 const aiService = require('../../services/aiService');
+const fs   = require('fs');
+const path = require('path');
+
+const IMG_PATH = path.join(__dirname, '../../../public/img');
 
 // Sesiones en memoria: { estado, servicioId, servicioNombre, cantidad, pedidoId }
 const sesiones = {};
@@ -291,13 +295,10 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
 
             setSesion(numero, { estado: 'comprobante', pedidoId: pedido.lastInsertRowid, totalBs, totalUsd });
 
-            let instrucciones = `✅ *Resumen del pedido:*\n`;
-            instrucciones += `🎬 ${cant}x ${s.nombre}\n`;
-            if (totalUsd) instrucciones += `💰 Total: *$${totalUsd} / Bs ${totalBs}*\n`;
-            instrucciones += `💳 Método: *${metodo.nombre}*\n\n`;
-
-            if (metodo.detalle) instrucciones += `📋 *Datos de pago:*\n${metodo.detalle}\n\n`;
-            instrucciones += `📸 Por favor *envía el comprobante de pago* (imagen o captura) para confirmar tu pedido.`;
+            let resumen = `✅ *Resumen del pedido #${pedido.lastInsertRowid}*\n`;
+            resumen += `🎬 ${cant}x ${s.nombre}\n`;
+            if (totalUsd) resumen += `💰 Total: *$${totalUsd} / Bs ${totalBs}*\n`;
+            resumen += `💳 Método: *${metodo.nombre}*`;
 
             notificarAdmin(sock, db,
                 `🛒 Nuevo pedido #${pedido.lastInsertRowid}\n` +
@@ -307,6 +308,20 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
                 `💳 Método: ${metodo.nombre}`
             );
 
+            // Si el método tiene imagen QR, enviarla con el monto como caption
+            if (metodo.imagen) {
+                const imgFile = path.join(IMG_PATH, 'qr', metodo.imagen);
+                if (fs.existsSync(imgFile)) {
+                    const caption = `${resumen}\n\n📸 Escanea este QR para pagar\n\n_Luego envíame el comprobante (captura de pantalla)_`;
+                    await sock.sendMessage(jid, { image: fs.readFileSync(imgFile), caption });
+                    return;
+                }
+            }
+
+            // Sin imagen: enviar texto con instrucciones
+            let instrucciones = resumen + '\n\n';
+            if (metodo.detalle) instrucciones += `📋 *Datos de pago:*\n${metodo.detalle}\n\n`;
+            instrucciones += `📸 Por favor *envía el comprobante de pago* (imagen o captura) para confirmar tu pedido.`;
             return enviar(sock, jid, instrucciones);
         }
 

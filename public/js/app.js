@@ -697,11 +697,46 @@ async function eliminarAdmin(usuario) {
 
 // ── BOT ───────────────────────────────────
 async function cargarBotStats() {
-    const stats = await api('/stats');
+    const [stats, config, pagos] = await Promise.all([
+        api('/stats'),
+        api('/config/public'),
+        api('/pagos')
+    ]);
+
     if (document.getElementById('botClientes'))
         document.getElementById('botClientes').textContent = stats.totalClientes || 0;
     if (document.getElementById('botNumero'))
-        document.getElementById('botNumero').textContent = process?.env?.ADMIN_NUMBER || '—';
+        document.getElementById('botNumero').textContent = config.admin_number || '—';
+    if (document.getElementById('botMetodos'))
+        document.getElementById('botMetodos').textContent = pagos?.length || 0;
+
+    renderPagosBot(pagos);
+
+    // También cargar prompt si no está cargado aún
+    if (config.prompt_sistema && !document.getElementById('cfgPrompt').value)
+        document.getElementById('cfgPrompt').value = config.prompt_sistema;
+}
+
+function renderPagosBot(pagos) {
+    const grid = document.getElementById('listaPagosBot');
+    if (!grid) return;
+    if (!pagos?.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados — agrega uno para que el bot pueda cobrar</p></div>`;
+        return;
+    }
+    grid.innerHTML = pagos.map(p => `
+        <div class="glass-panel pago-card">
+            <button class="delete-btn" onclick="eliminarPago(${p.id}, true)">✕</button>
+            <span class="pago-tipo">${tipoLabel(p.tipo)}</span>
+            <h3>${p.nombre}</h3>
+            <p class="pago-detalle">${p.detalle || ''}</p>
+            ${p.imagen ? `<img src="/img/qr/${p.imagen}" class="qr-preview" alt="QR">` : '<p style="color:var(--text-muted);font-size:12px;margin-top:8px">Sin imagen QR</p>'}
+        </div>`
+    ).join('');
+}
+
+function tipoLabel(tipo) {
+    return { qr: '📷 QR', cuenta: '🏦 Cuenta', yape: '📱 Yape/Tigo', efectivo: '💵 Efectivo' }[tipo] || tipo;
 }
 
 async function reconectarBot() { await api('/bot/reconnect', 'POST'); }
@@ -779,12 +814,22 @@ async function guardarPago() {
     await api('/pagos', 'POST', data);
     cerrarModal('modalPago');
     cargarConfig();
+    cargarBotStats();
 }
 
-async function eliminarPago(id) {
+async function eliminarPago(id, desdeBotView = false) {
     if (!confirm('¿Eliminar este método de pago?')) return;
     await api(`/pagos/${id}`, 'DELETE');
-    cargarConfig();
+    if (desdeBotView) cargarBotStats();
+    else cargarConfig();
+}
+
+async function guardarPagoYRecargar() {
+    await guardarPago();
+    // Si el bot-view está visible, recargarlo también
+    if (document.getElementById('bot-view')?.classList.contains('active-view')) {
+        cargarBotStats();
+    }
 }
 
 // ── UTILIDADES ────────────────────────────

@@ -65,6 +65,7 @@ const BG_MAP = {
     'ventas-view':    'bg-ventas',
     'admins-view':    'bg-admins',
     'bot-view':       'bg-bot',
+    'pagos-view':     'bg-pagos',
     'config-view':    'bg-config',
 };
 
@@ -124,6 +125,7 @@ function switchView(viewId) {
         'clientes-view':  cargarClientes,
         'ventas-view':    cargarVentas,
         'admins-view':    cargarAdmins,
+        'pagos-view':     cargarPagosView,
         'config-view':    cargarConfig,
         'bot-view':       cargarBotStats
     };
@@ -714,31 +716,13 @@ async function cargarBotStats() {
         document.getElementById('botNumero').textContent = config.admin_number || '—';
     if (document.getElementById('botMetodos'))
         document.getElementById('botMetodos').textContent = pagos?.length || 0;
+    if (document.getElementById('botMetodosResumen'))
+        document.getElementById('botMetodosResumen').textContent = pagos?.length || 0;
 
-    renderPagosBot(pagos);
     cargarConversaciones();
 
-    // También cargar prompt si no está cargado aún
     if (config.prompt_sistema && !document.getElementById('cfgPrompt').value)
         document.getElementById('cfgPrompt').value = config.prompt_sistema;
-}
-
-function renderPagosBot(pagos) {
-    const grid = document.getElementById('listaPagosBot');
-    if (!grid) return;
-    if (!pagos?.length) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados — agrega uno para que el bot pueda cobrar</p></div>`;
-        return;
-    }
-    grid.innerHTML = pagos.map(p => `
-        <div class="glass-panel pago-card">
-            <button class="delete-btn" onclick="eliminarPago(${p.id}, true)">✕</button>
-            <span class="pago-tipo">${tipoLabel(p.tipo)}</span>
-            <h3>${p.nombre}</h3>
-            <p class="pago-detalle">${p.detalle || ''}</p>
-            ${p.imagen ? `<img src="/img/qr/${p.imagen}" class="qr-preview" alt="QR">` : '<p style="color:var(--text-muted);font-size:12px;margin-top:8px">Sin imagen QR</p>'}
-        </div>`
-    ).join('');
 }
 
 function tipoLabel(tipo) {
@@ -839,8 +823,6 @@ async function borrarHilo() {
 // ── CONFIGURACIÓN ─────────────────────────
 async function cargarConfig() {
     await cargarNombreEmpresa();
-    const pagos = await api('/pagos');
-    renderPagos(pagos);
 }
 
 async function guardarConfig() {
@@ -872,19 +854,27 @@ async function subirLogo(input) {
 }
 
 // ── PAGOS ─────────────────────────────────
+async function cargarPagosView() {
+    const pagos = await api('/pagos');
+    renderPagos(pagos);
+}
+
 function renderPagos(pagos) {
     const grid = document.getElementById('listaPagos');
+    if (!grid) return;
     if (!pagos?.length) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>`;
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados — agrega uno para que el bot pueda cobrar</p></div>`;
         return;
     }
     grid.innerHTML = pagos.map(p => `
         <div class="glass-panel pago-card">
             <button class="delete-btn" onclick="eliminarPago(${p.id})">✕</button>
-            <span class="pago-tipo">${p.tipo}</span>
+            <span class="pago-tipo">${tipoLabel(p.tipo)}</span>
             <h3>${p.nombre}</h3>
             <p class="pago-detalle">${p.detalle || ''}</p>
-            ${p.imagen ? `<img src="/img/qr/${p.imagen}" class="qr-preview" alt="QR">` : ''}
+            ${p.imagen
+                ? `<img src="/img/qr/${p.imagen}" class="qr-preview" alt="QR">`
+                : '<p style="color:var(--text-muted);font-size:12px;margin-top:8px">Sin imagen QR</p>'}
         </div>`
     ).join('');
 }
@@ -895,36 +885,32 @@ async function guardarPago() {
         tipo:    document.getElementById('pagoTipo').value,
         detalle: document.getElementById('pagoDetalle').value.trim()
     };
-    if (!data.nombre) return alert('El nombre es obligatorio');
+    if (!data.nombre) return mostrarToast('El nombre es obligatorio', 'error');
 
     const input = document.getElementById('pagoQRInput');
     if (input.files[0]) {
         const form = new FormData();
         form.append('file', input.files[0]);
-        const up   = await fetch('/api/media/upload?carpeta=qr', { method: 'POST', body: form });
-        const upd  = await up.json();
+        const up  = await fetch('/api/media/upload?carpeta=qr', { method: 'POST', body: form });
+        const upd = await up.json();
         if (upd.filename) data.imagen = upd.filename;
     }
 
     await api('/pagos', 'POST', data);
     cerrarModal('modalPago');
-    cargarConfig();
-    cargarBotStats();
+    mostrarToast('✅ Método de pago guardado');
+    cargarPagosView();
+    // Actualizar contador en bot-view si está cargado
+    const metodos = await api('/pagos');
+    if (document.getElementById('botMetodos')) document.getElementById('botMetodos').textContent = metodos.length;
+    if (document.getElementById('botMetodosResumen')) document.getElementById('botMetodosResumen').textContent = metodos.length;
 }
 
-async function eliminarPago(id, desdeBotView = false) {
+async function eliminarPago(id) {
     if (!confirm('¿Eliminar este método de pago?')) return;
     await api(`/pagos/${id}`, 'DELETE');
-    if (desdeBotView) cargarBotStats();
-    else cargarConfig();
-}
-
-async function guardarPagoYRecargar() {
-    await guardarPago();
-    // Si el bot-view está visible, recargarlo también
-    if (document.getElementById('bot-view')?.classList.contains('active-view')) {
-        cargarBotStats();
-    }
+    mostrarToast('Método eliminado');
+    cargarPagosView();
 }
 
 // ── UTILIDADES ────────────────────────────

@@ -20,6 +20,7 @@
     <div class="bg-layer" id="bg-ventas"></div>
     <div class="bg-layer" id="bg-admins"></div>
     <div class="bg-layer" id="bg-bot"></div>
+    <div class="bg-layer" id="bg-pagos"></div>
     <div class="bg-layer" id="bg-config"></div>
 </div>
 <div class="ambient-overlay"></div>
@@ -60,6 +61,7 @@
             <button onclick="switchView('clientes-view')"  id="btn-clientes">Clientes</button>
             <button onclick="switchView('ventas-view')"    id="btn-ventas">Ventas</button>
             <button onclick="switchView('admins-view')"    id="btn-admins">Admins</button>
+            <button onclick="switchView('pagos-view')"     id="btn-pagos">💳 Pagos</button>
             <button onclick="switchView('bot-view')"       id="btn-bot">Bot WA</button>
             <button onclick="switchView('config-view')"    id="btn-config">Config</button>
             <button onclick="openHub()" style="color:var(--text-muted)">⊞ Hub</button>
@@ -100,6 +102,10 @@
             <div class="profile-card" onclick="enterPanel('admins-view')">
                 <div class="profile-avatar glass-panel">🛡️</div>
                 <p>Admins</p>
+            </div>
+            <div class="profile-card" onclick="enterPanel('pagos-view')">
+                <div class="profile-avatar glass-panel">💳</div>
+                <p>Pagos</p>
             </div>
             <div class="profile-card" onclick="enterPanel('bot-view')">
                 <div class="profile-avatar glass-panel">🤖</div>
@@ -388,25 +394,36 @@
             </div>
         </div>
 
-        <!-- Fila 3: Métodos de Pago -->
-        <div class="glass-panel" style="margin-top:24px;padding:28px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-                <div>
-                    <h3 style="margin:0">💳 Métodos de Pago</h3>
-                    <p style="color:var(--text-muted);font-size:13px;margin-top:4px">El bot enviará estos datos (y la imagen QR si existe) al cliente junto con el monto exacto</p>
-                </div>
-                <button class="neon-btn" onclick="abrirModal('modalPago')">+ Agregar método</button>
+        <!-- Acceso a Pagos -->
+        <div class="glass-panel" style="margin-top:24px;padding:20px 28px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+                <h3 style="margin:0">💳 Métodos de Pago</h3>
+                <p style="color:var(--text-muted);font-size:13px;margin-top:4px">
+                    <strong id="botMetodosResumen" style="color:white">0</strong> métodos activos — el bot los usa al momento de cobrar
+                </p>
             </div>
-            <div class="pagos-grid" id="listaPagosBot">
-                <div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>
+            <button class="neon-btn btn-outline" onclick="enterPanel('pagos-view')">Gestionar pagos →</button>
+        </div>
+    </main>
+
+    <!-- ── MÉTODOS DE PAGO ───────────────── -->
+    <main id="pagos-view" class="view-section">
+        <div class="section-header">
+            <div>
+                <h1>Métodos de Pago</h1>
+                <p>El bot enviará estos datos (y el QR si existe) al cliente con el monto exacto a pagar</p>
             </div>
+            <button class="neon-btn" onclick="abrirModal('modalPago')">+ Agregar método</button>
+        </div>
+        <div class="pagos-grid" id="listaPagos">
+            <div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>
         </div>
     </main>
 
     <!-- ── CONFIGURACIÓN ─────────────────── -->
     <main id="config-view" class="view-section">
         <div class="section-header">
-            <div><h1>Configuración de Plataforma</h1><p>Ajustes generales, logo y métodos de pago</p></div>
+            <div><h1>Configuración de Plataforma</h1><p>Ajustes generales y logo de la empresa</p></div>
         </div>
         <div class="settings-grid">
 
@@ -444,14 +461,6 @@
                     <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="subirLogo(this)">
                     <button class="neon-btn btn-outline btn-sm" onclick="document.getElementById('logoInput').click()">📤 Subir logo</button>
                 </div>
-            </div>
-
-            <div class="glass-panel settings-card" style="grid-column:1/-1">
-                <h3>Métodos de Pago</h3>
-                <div class="pagos-grid" id="listaPagos">
-                    <div class="empty-state" style="grid-column:1/-1"><span class="ei">💳</span><p>Sin métodos configurados</p></div>
-                </div>
-                <button class="neon-btn" onclick="abrirModal('modalPago')">+ Agregar método de pago</button>
             </div>
 
             <div class="glass-panel settings-card" style="grid-column:1/-1">

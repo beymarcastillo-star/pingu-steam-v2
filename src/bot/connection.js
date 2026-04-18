@@ -1,132 +1,150 @@
 // =============================================
 // BOT WHATSAPP — connection.js
-// Manejo de conexión con Baileys
 // =============================================
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    Browsers,
+    fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
 const pino           = require('pino');
 const qrcodeTerminal = require('qrcode-terminal');
 const path           = require('path');
+const fs             = require('fs');
 
-const clientHandler  = require('./handlers/clientHandler');
-const adminHandler   = require('./handlers/adminHandler');
+const clientHandler = require('./handlers/clientHandler');
+const adminHandler  = require('./handlers/adminHandler');
 
-const AUTH_PATH    = path.join(__dirname, '../../bot_auth');
-const MAX_REINTENTOS = 5;
-const CODIGOS_SIN_RECONEXION = [
-    DisconnectReason.loggedOut,
-    DisconnectReason.badSession,
-    405  // WhatsApp rechaza la sesión — hay que escanear QR de nuevo
-];
+const AUTH_PATH = path.join(__dirname, '../../bot_auth');
 
-let sock        = null;
-let ioRef       = null;
-let reintentos  = 0;
-let timerRecon  = null;
+let sock         = null;
+let ioRef        = null;
+let lastQR       = null;
+let estado       = 'disconnected';
+let ioReady      = false;
 
+// ── HELPERS ───────────────────────────────
+function emitir(evento, dato) {
+    if (ioRef) ioRef.emit(evento, dato);
+    if (evento === 'connection-status') estado = dato;
+    if (evento === 'qr') lastQR = dato;
+}
+
+function limpiarAuth() {
+    try {
+        fs.rmSync(AUTH_PATH, { recursive: true, force: true });
+        fs.mkdirSync(AUTH_PATH, { recursive: true });
+    } catch (_) {}
+}
+
+// ── CONEXIÓN PRINCIPAL ────────────────────
 async function conectar(io) {
     ioRef = io;
 
-    // Limpiar timer previo si existe
-    if (timerRecon) { clearTimeout(timerRecon); timerRecon = null; }
+    // Enviar estado actual a cada socket nuevo que se conecte (solo registrar una vez)
+    if (!ioReady) {
+        ioReady = true;
+        io.on('connection', (socket) => {
+            socket.emit('connection-status', estado);
+            if (lastQR && estado !== 'connected') socket.emit('qr', lastQR);
+        });
+    }
 
+    const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
 
     sock = makeWASocket({
+        version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: Browsers.macOS('Desktop'),   // versión reconocida por WhatsApp
-        connectTimeoutMs: 30000,
-        keepAliveIntervalMs: 15000
+        browser: Browsers.ubuntu('Chrome'),
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        markOnlineOnConnect: false,
+        syncFullHistory: false,
     });
 
-    // ── EVENTOS DE CONEXIÓN ────────────────
     sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
         if (qr) {
             qrcodeTerminal.generate(qr, { small: true });
-            console.log('📱 Escanea el QR con WhatsApp');
-            if (ioRef) ioRef.emit('qr', qr);
+            console.log('📱 QR listo — escanea con WhatsApp');
+            emitir('qr', qr);
+            emitir('connection-status', 'disconnected');
         }
 
         if (connection === 'open') {
-            reintentos = 0;
+            lastQR = null;
             console.log('🟢 WhatsApp conectado');
-            if (ioRef) ioRef.emit('connection-status', 'connected');
+            emitir('connection-status', 'connected');
         }
 
         if (connection === 'close') {
             const codigo = lastDisconnect?.error?.output?.statusCode;
-            const sinReconexion = CODIGOS_SIN_RECONEXION.includes(codigo);
+            console.log(`🔴 Conexión cerrada — código: ${codigo ?? 'desconocido'}`);
 
-            if (sinReconexion) {
-                console.log(`🔴 Desconectado (código ${codigo}) — se requiere escanear QR nuevamente.`);
-                console.log('   Reinicia el servidor para obtener un nuevo QR.');
-                if (ioRef) ioRef.emit('connection-status', 'disconnected');
-                return; // No reconectar automáticamente
-            }
-
-            reintentos++;
-            if (reintentos > MAX_REINTENTOS) {
-                console.log(`🔴 Se alcanzó el máximo de reintentos (${MAX_REINTENTOS}). Deteniéndose.`);
-                console.log('   Reinicia el servidor manualmente.');
-                if (ioRef) ioRef.emit('connection-status', 'disconnected');
+            if (codigo === DisconnectReason.loggedOut) {
+                // El usuario cerró sesión desde el teléfono → limpiar y pedir QR nuevo
+                console.log('   Sesión cerrada desde el teléfono. Limpiando credenciales...');
+                limpiarAuth();
+                emitir('connection-status', 'disconnected');
+                setTimeout(() => conectar(io), 5000);
                 return;
             }
 
-            // Backoff exponencial: 3s, 6s, 12s, 24s, 48s
-            const espera = Math.min(3000 * Math.pow(2, reintentos - 1), 60000);
-            console.log(`🟡 Reintentando conexión (${reintentos}/${MAX_REINTENTOS}) en ${espera/1000}s...`);
-            if (ioRef) ioRef.emit('connection-status', 'connecting');
-            timerRecon = setTimeout(() => conectar(io), espera);
+            if (codigo === DisconnectReason.badSession || codigo === 405) {
+                // Credenciales corruptas o rechazadas → limpiar y esperar reconexión manual
+                console.log('   Credenciales inválidas. Limpiando — usa el botón Reconectar en el panel.');
+                limpiarAuth();
+                emitir('connection-status', 'disconnected');
+                // NO reconectar automáticamente — esperar acción del usuario
+                return;
+            }
+
+            // Otros errores (red, timeout) → reintentar con backoff
+            emitir('connection-status', 'connecting');
+            const espera = 8000;
+            console.log(`🟡 Reintentando en ${espera / 1000}s...`);
+            setTimeout(() => conectar(io), espera);
         }
     });
 
-    // ── MENSAJES ENTRANTES ─────────────────
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         const msg = messages[0];
         if (!msg || msg.key.fromMe) return;
-
-        try {
-            await procesarMensaje(msg);
-        } catch (e) {
-            console.error('Error procesando mensaje:', e.message);
-        }
+        try { await procesarMensaje(msg); }
+        catch (e) { console.error('Error al procesar mensaje:', e.message); }
     });
 
     sock.ev.on('creds.update', saveCreds);
 }
 
+// ── PROCESAR MENSAJES ─────────────────────
 async function procesarMensaje(msg) {
     const db     = require('../db/database');
     const jid    = msg.key.remoteJid;
     const nombre = msg.pushName || 'Cliente';
     const numero = jid.split('@')[0];
 
-    const msgContent = msg.message || {};
+    const content = msg.message || {};
     const texto = (
-        msgContent.conversation ||
-        msgContent.extendedTextMessage?.text ||
-        msgContent.imageMessage?.caption ||
+        content.conversation ||
+        content.extendedTextMessage?.text ||
+        content.imageMessage?.caption ||
         ''
     ).trim();
 
-    const esImagen = !!(msgContent.imageMessage || msgContent.documentMessage);
+    const esImagen = !!(content.imageMessage || content.documentMessage);
+    const admin    = db.prepare('SELECT * FROM admins WHERE telefono = ? AND activo = 1').get(numero);
 
-    // Determinar si es admin
-    const adminRow = db.prepare('SELECT * FROM admins WHERE telefono = ? AND activo = 1').get(numero);
-    const esAdmin  = !!adminRow;
-
-    if (esAdmin) {
-        await adminHandler.manejar({ sock, jid, texto, numero, nombre, adminRow, db });
-    } else if (esImagen) {
-        await clientHandler.manejarImagen({ sock, jid, numero, nombre, db });
-    } else {
-        await clientHandler.manejar({ sock, jid, texto, numero, nombre, db });
-    }
+    if (admin)         await adminHandler.manejar({ sock, jid, texto, numero, nombre, adminRow: admin, db });
+    else if (esImagen) await clientHandler.manejarImagen({ sock, jid, numero, nombre, db });
+    else               await clientHandler.manejar({ sock, jid, texto, numero, nombre, db });
 }
 
-// Función para enviar mensaje desde la API
+// ── API PÚBLICA ───────────────────────────
 function enviar(jid, contenido) {
     if (!sock) throw new Error('Bot no conectado');
     return sock.sendMessage(jid, contenido);
@@ -137,8 +155,8 @@ function desconectar() {
 }
 
 function reconectar() {
-    if (sock) sock.end();
-    conectar(ioRef);
+    if (sock) { try { sock.end(); } catch (_) {} }
+    setTimeout(() => conectar(ioRef), 1000);
 }
 
 module.exports = { conectar, enviar, desconectar, reconectar };

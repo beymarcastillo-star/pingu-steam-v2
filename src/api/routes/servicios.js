@@ -3,6 +3,7 @@ const db     = require('../../db/database');
 
 // GET /api/servicios
 router.get('/', (_req, res) => {
+    const tc = parseFloat(db.prepare("SELECT valor FROM config WHERE clave = 'tipo_cambio'").get()?.valor || 6.96);
     const servicios = db.prepare(`
         SELECT s.*,
                COUNT(CASE WHEN p.estado = 'libre' THEN 1 END) as libres
@@ -12,15 +13,50 @@ router.get('/', (_req, res) => {
         WHERE s.activo = 1
         GROUP BY s.id
     `).all();
-    res.json(servicios);
+
+    // Calcular precio en Bs y margen actual en tiempo real
+    const result = servicios.map(s => ({
+        ...s,
+        precio_bs:     s.precio_usd ? +(s.precio_usd * tc).toFixed(2) : null,
+        tipo_cambio:   tc,
+        margen_actual: (s.costo_usd && s.precio_usd)
+            ? +(((s.precio_usd - s.costo_usd) / s.costo_usd) * 100).toFixed(1)
+            : null,
+        precio_minimo_usd: s.costo_usd
+            ? +(s.costo_usd * (1 + (s.margen_minimo || 20) / 100)).toFixed(2)
+            : null
+    }));
+
+    res.json(result);
 });
 
 // POST /api/servicios
 router.post('/', (req, res) => {
-    const { nombre, descripcion, imagen } = req.body;
+    const { nombre, descripcion, imagen, precio_usd, costo_usd, margen_minimo } = req.body;
     if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
-    const result = db.prepare('INSERT INTO servicios (nombre, descripcion, imagen) VALUES (?, ?, ?)').run(nombre, descripcion || null, imagen || null);
+    const result = db.prepare(`
+        INSERT INTO servicios (nombre, descripcion, imagen, precio_usd, costo_usd, margen_minimo)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(nombre, descripcion || null, imagen || null,
+           precio_usd || null, costo_usd || null, margen_minimo || 20);
     res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+// PUT /api/servicios/:id — editar precios y datos
+router.put('/:id', (req, res) => {
+    const { nombre, descripcion, precio_usd, costo_usd, margen_minimo } = req.body;
+    db.prepare(`
+        UPDATE servicios
+        SET nombre = COALESCE(?, nombre),
+            descripcion = COALESCE(?, descripcion),
+            precio_usd = ?,
+            costo_usd = ?,
+            margen_minimo = COALESCE(?, margen_minimo)
+        WHERE id = ?
+    `).run(nombre || null, descripcion || null,
+           precio_usd ?? null, costo_usd ?? null,
+           margen_minimo || null, req.params.id);
+    res.json({ ok: true });
 });
 
 // POST /api/servicios/:id/imagen

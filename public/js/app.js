@@ -51,22 +51,53 @@ async function cargarNombreEmpresa() {
     if (d.nombre_empresa) document.getElementById('cfgNombreEmpresa').value = d.nombre_empresa;
     if (d.nombre_bot)     document.getElementById('cfgNombreBot').value     = d.nombre_bot;
     if (d.moneda)         document.getElementById('cfgMoneda').value         = d.moneda;
+    if (d.tipo_cambio)    document.getElementById('cfgTipoCambio').value     = d.tipo_cambio;
     if (d.prompt_sistema) document.getElementById('cfgPrompt').value         = d.prompt_sistema;
 }
 
+// ── FONDOS DINÁMICOS ──────────────────────
+const BG_MAP = {
+    'hub':            'bg-hub',
+    'dashboard-view': 'bg-dashboard',
+    'pedidos-view':   'bg-pedidos',
+    'servicios-view': 'bg-catalogo',
+    'clientes-view':  'bg-clientes',
+    'ventas-view':    'bg-ventas',
+    'admins-view':    'bg-admins',
+    'bot-view':       'bg-bot',
+    'config-view':    'bg-config',
+};
+
+function changeBackground(key) {
+    document.querySelectorAll('.bg-layer').forEach(l => l.classList.remove('active'));
+    const targetId = BG_MAP[key];
+    if (targetId) document.getElementById(targetId)?.classList.add('active');
+}
+
+// Efecto parallax al hacer scroll dentro del panel
+document.addEventListener('DOMContentLoaded', () => {
+    const contentSlide = document.getElementById('content-slide');
+    if (contentSlide) {
+        contentSlide.addEventListener('scroll', () => {
+            const scrolled = contentSlide.scrollTop;
+            document.getElementById('parallax-wrapper').style.transform =
+                `translateY(${scrolled * 0.25}px)`;
+        });
+    }
+});
+
 // ── NAVEGACIÓN ────────────────────────────
 function openHub() {
-    // Subir el slider de vuelta al piso del hub
     document.getElementById('main-nav').style.display = 'none';
     document.getElementById('view-slider').classList.remove('in-panel');
-    // Resetear scroll del contenido para la próxima vez
     document.getElementById('content-slide').scrollTop = 0;
+    document.getElementById('parallax-wrapper').style.transform = '';
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+    changeBackground('hub');
 }
 
 function enterPanel(viewId) {
-    // Bajar el slider al piso de contenido
     document.getElementById('main-nav').style.display = 'flex';
     document.getElementById('view-slider').classList.add('in-panel');
     switchView(viewId);
@@ -77,10 +108,13 @@ function switchView(viewId) {
     document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
     document.getElementById(viewId).classList.add('active');
     document.getElementById('content-slide').scrollTop = 0;
+    document.getElementById('parallax-wrapper').style.transform = '';
 
     const btnId = 'btn-' + viewId.replace('-view', '');
     const btn   = document.getElementById(btnId);
     if (btn) btn.classList.add('active');
+
+    changeBackground(viewId);
 
     // Cargar datos según sección
     const loaders = {
@@ -220,14 +254,28 @@ function renderServiceCard(s, editable) {
     const stockCls   = libres === 0 ? 'empty' : libres <= 2 ? 'low' : 'ok';
     const stockLabel = libres === 0 ? '🔴 Sin stock' : `🟢 ${libres} disponible${libres !== 1 ? 's' : ''}`;
 
-    // Imagen de fondo
     const bgStyle = s.imagen
         ? `background-image:url('/img/servicios/${s.imagen}');background-size:cover;background-position:center`
         : '';
     const placeholder = s.imagen ? '' : `<span style="position:relative;z-index:1">🎬</span>`;
 
+    // Precios
+    let precioHtml = '';
+    if (s.precio_usd) {
+        const margenCls = s.margen_actual !== null
+            ? (s.margen_actual < s.margen_minimo ? 'color:var(--danger)' : 'color:var(--success)')
+            : '';
+        precioHtml = `
+            <div class="card-prices">
+                <span class="price-usd">$${s.precio_usd.toFixed(2)}</span>
+                <span class="price-bs">Bs ${s.precio_bs?.toFixed(2) ?? '—'}</span>
+                ${s.margen_actual !== null ? `<span class="price-margin" style="${margenCls}">${s.margen_actual}% margen</span>` : ''}
+            </div>`;
+    }
+
     const editBtns = editable ? `
-        <button class="upload-btn" onclick="event.stopPropagation();abrirCambiarImagen(${s.id})">🖼️ Imagen</button>
+        <button class="upload-btn" onclick="event.stopPropagation();abrirEditarServicio(${s.id})">✏️ Editar</button>
+        <button class="upload-btn" onclick="event.stopPropagation();abrirCambiarImagen(${s.id})" style="top:44px">🖼️ Imagen</button>
         <button onclick="event.stopPropagation();eliminarServicio(${s.id})"
             style="position:absolute;top:10px;left:10px;z-index:10;background:rgba(255,51,102,0.5);border:none;color:white;border-radius:8px;padding:3px 9px;cursor:pointer;font-size:12px;display:none"
             class="del-btn">✕</button>` : '';
@@ -243,11 +291,82 @@ function renderServiceCard(s, editable) {
             <span class="card-tag">Streaming</span>
             <h3>${s.nombre}</h3>
             <p>${s.descripcion || 'Servicio de streaming'}</p>
+            ${precioHtml}
             <div class="card-action">
                 <span class="card-stock ${stockCls}">${stockLabel}</span>
             </div>
         </div>
     </div>`;
+}
+
+// Abrir modal nuevo servicio
+async function abrirModalServicio() {
+    document.getElementById('svcId').value        = '';
+    document.getElementById('svcNombre').value    = '';
+    document.getElementById('svcDesc').value      = '';
+    document.getElementById('svcPrecioUsd').value = '';
+    document.getElementById('svcCostoUsd').value  = '';
+    document.getElementById('svcMargen').value    = '20';
+    document.getElementById('svcImgPreview').style.display = 'none';
+    document.getElementById('svcImgInput').value  = '';
+    document.getElementById('preciosPreview').style.display = 'none';
+    document.getElementById('modalServicioTitulo').textContent = 'Agregar servicio';
+
+    // Cargar tipo de cambio actual
+    const cfg = await api('/config/public');
+    document.getElementById('svcTipoCambio').value = cfg.tipo_cambio || '6.96';
+    abrirModal('modalServicio');
+}
+
+// Abrir modal editar servicio existente
+async function abrirEditarServicio(id) {
+    const servicios = await api('/servicios');
+    const s = servicios.find(x => x.id === id);
+    if (!s) return;
+
+    document.getElementById('svcId').value        = id;
+    document.getElementById('svcNombre').value    = s.nombre || '';
+    document.getElementById('svcDesc').value      = s.descripcion || '';
+    document.getElementById('svcPrecioUsd').value = s.precio_usd || '';
+    document.getElementById('svcCostoUsd').value  = s.costo_usd || '';
+    document.getElementById('svcMargen').value    = s.margen_minimo || 20;
+    document.getElementById('svcTipoCambio').value = s.tipo_cambio || 6.96;
+    document.getElementById('svcImgPreview').style.display = 'none';
+    document.getElementById('svcImgInput').value  = '';
+    document.getElementById('modalServicioTitulo').textContent = 'Editar servicio';
+
+    calcularPreciosBs();
+    abrirModal('modalServicio');
+}
+
+// Calcular preview de precios en tiempo real
+function calcularPreciosBs() {
+    const precioUsd  = parseFloat(document.getElementById('svcPrecioUsd').value) || 0;
+    const costoUsd   = parseFloat(document.getElementById('svcCostoUsd').value) || 0;
+    const margen     = parseFloat(document.getElementById('svcMargen').value) || 20;
+    const tc         = parseFloat(document.getElementById('svcTipoCambio').value) || 6.96;
+    const preview    = document.getElementById('preciosPreview');
+
+    if (!precioUsd && !costoUsd) { preview.style.display = 'none'; return; }
+    preview.style.display = 'block';
+
+    document.getElementById('pvUsd').textContent = precioUsd.toFixed(2);
+    document.getElementById('pvBs').textContent  = (precioUsd * tc).toFixed(2);
+
+    const precioMinUsd = costoUsd ? +(costoUsd * (1 + margen / 100)).toFixed(2) : null;
+    document.getElementById('pvMinUsd').textContent = precioMinUsd ? `${precioMinUsd}` : '—';
+    document.getElementById('pvMinBs').textContent  = precioMinUsd ? `${(precioMinUsd * tc).toFixed(2)}` : '—';
+
+    if (costoUsd && precioUsd) {
+        const margenReal = ((precioUsd - costoUsd) / costoUsd * 100).toFixed(1);
+        const ok = parseFloat(margenReal) >= margen;
+        const el = document.getElementById('pvMargen');
+        el.textContent = `${margenReal}%`;
+        el.style.color = ok ? 'var(--success)' : 'var(--danger)';
+    } else {
+        document.getElementById('pvMargen').textContent = '—';
+        document.getElementById('pvMargen').style.color = 'var(--text-muted)';
+    }
 }
 
 // Abrir modal para cambiar imagen de un servicio existente
@@ -278,7 +397,20 @@ async function subirImagenServicio() {
 
 async function guardarServicio() {
     const nombre = document.getElementById('svcNombre').value.trim();
-    if (!nombre) return alert('El nombre es obligatorio');
+    if (!nombre) return mostrarToast('❌ El nombre es obligatorio');
+
+    const id         = document.getElementById('svcId').value;
+    const precioUsd  = parseFloat(document.getElementById('svcPrecioUsd').value) || null;
+    const costoUsd   = parseFloat(document.getElementById('svcCostoUsd').value)  || null;
+    const margen     = parseFloat(document.getElementById('svcMargen').value)    || 20;
+
+    // Validar margen si tiene costo y precio
+    if (precioUsd && costoUsd) {
+        const margenReal = ((precioUsd - costoUsd) / costoUsd * 100);
+        if (margenReal < margen) {
+            return mostrarToast(`❌ Precio muy bajo — margen real ${margenReal.toFixed(1)}% < mínimo ${margen}%`);
+        }
+    }
 
     let imagen = null;
     const input = document.getElementById('svcImgInput');
@@ -290,13 +422,26 @@ async function guardarServicio() {
         if (data.filename) imagen = data.filename;
     }
 
-    await api('/servicios', 'POST', { nombre, descripcion: document.getElementById('svcDesc').value.trim(), imagen });
+    const body = {
+        nombre,
+        descripcion:   document.getElementById('svcDesc').value.trim(),
+        precio_usd:    precioUsd,
+        costo_usd:     costoUsd,
+        margen_minimo: margen,
+        ...(imagen ? { imagen } : {})
+    };
+
+    if (id) {
+        await api(`/servicios/${id}`, 'PUT', body);
+    } else {
+        await api('/servicios', 'POST', body);
+    }
+
     cerrarModal('modalServicio');
-    document.getElementById('svcNombre').value = '';
-    document.getElementById('svcDesc').value   = '';
     input.value = '';
     document.getElementById('svcImgPreview').style.display = 'none';
     cargarServicios();
+    mostrarToast('✅ Servicio guardado');
 }
 
 async function eliminarServicio(id) {
@@ -349,20 +494,159 @@ async function eliminarCuenta(id) {
     cargarServicios();
 }
 
-async function verPerfiles(_id) {
-    alert('Módulo de perfiles — próximamente 🚧');
+async function verPerfiles(cuentaId) {
+    // Guardar id y cargar título
+    document.getElementById('perfilesCuentaId').value = cuentaId;
+    document.getElementById('perfilNombre').value = '';
+    document.getElementById('perfilPin').value    = '';
+    document.getElementById('perfilPrecio').value = '';
+
+    // Buscar nombre de la cuenta para el título
+    const cuentas = await api('/cuentas');
+    const cuenta  = cuentas.find(c => c.id === cuentaId);
+    document.getElementById('modalPerfilesTitulo').textContent =
+        `Perfiles — ${cuenta?.servicio_nombre || ''} (${cuenta?.correo || ''})`;
+
+    await recargarPerfiles(cuentaId);
+    abrirModal('modalPerfiles');
+}
+
+async function recargarPerfiles(cuentaId) {
+    const id       = cuentaId || document.getElementById('perfilesCuentaId').value;
+    const perfiles = await api(`/perfiles?cuenta_id=${id}`);
+
+    renderTabla('tablaPerfiles', perfiles, p => {
+        const esCls = { libre: 'active', vendido: 'closed' }[p.estado] || 'pending';
+        const vence = p.fecha_vencimiento
+            ? `<span style="font-size:11px">${formatFecha(p.fecha_vencimiento)}</span>`
+            : '<span style="color:var(--text-muted);font-size:11px">—</span>';
+        const cliente = p.cliente_nombre
+            ? `<span style="font-size:12px">${p.cliente_nombre}</span>`
+            : '<span style="color:var(--text-muted);font-size:11px">—</span>';
+
+        return `<tr>
+            <td style="font-weight:600">${p.nombre_perfil}</td>
+            <td style="font-family:monospace;font-size:13px">${p.pin || '—'}</td>
+            <td><span class="badge ${esCls}">${p.estado}</span></td>
+            <td>${cliente}</td>
+            <td>${vence}</td>
+            <td style="color:var(--success);font-weight:600">${p.precio_venta ? 'Bs ' + p.precio_venta : '—'}</td>
+            <td style="display:flex;gap:4px">
+                ${p.estado === 'libre'
+                    ? `<button class="neon-btn btn-sm" onclick="marcarVendido(${p.id})">Vender</button>`
+                    : `<button class="neon-btn btn-sm btn-outline" onclick="liberarPerfil(${p.id})">Liberar</button>`
+                }
+                <button class="neon-btn btn-sm btn-danger" onclick="eliminarPerfil(${p.id})">✕</button>
+            </td>
+        </tr>`;
+    }, 7);
+}
+
+async function agregarPerfil() {
+    const cuenta_id    = document.getElementById('perfilesCuentaId').value;
+    const nombre_perfil = document.getElementById('perfilNombre').value.trim();
+    const pin          = document.getElementById('perfilPin').value.trim();
+    const precio_venta = parseFloat(document.getElementById('perfilPrecio').value) || null;
+
+    if (!nombre_perfil) return mostrarToast('❌ Escribe el nombre del perfil');
+
+    await api('/perfiles', 'POST', { cuenta_id: parseInt(cuenta_id), nombre_perfil, pin, precio_venta });
+    document.getElementById('perfilNombre').value = '';
+    document.getElementById('perfilPin').value    = '';
+    document.getElementById('perfilPrecio').value = '';
+    await recargarPerfiles();
+    mostrarToast('✅ Perfil agregado');
+}
+
+async function marcarVendido(perfilId) {
+    const vence = prompt('Fecha de vencimiento (YYYY-MM-DD), opcional:') || null;
+    await api(`/perfiles/${perfilId}`, 'PUT', { estado: 'vendido', fecha_vencimiento: vence });
+    await recargarPerfiles();
+    mostrarToast('✅ Perfil marcado como vendido');
+}
+
+async function liberarPerfil(perfilId) {
+    await api(`/perfiles/${perfilId}`, 'PUT', { estado: 'libre', cliente_id: null, fecha_vencimiento: null });
+    await recargarPerfiles();
+    mostrarToast('✅ Perfil liberado');
+}
+
+async function eliminarPerfil(perfilId) {
+    if (!confirm('¿Eliminar este perfil?')) return;
+    await api(`/perfiles/${perfilId}`, 'DELETE');
+    await recargarPerfiles();
+    mostrarToast('✅ Perfil eliminado');
 }
 
 // ── CLIENTES ──────────────────────────────
+let _clientesCache = [];
+
 async function cargarClientes() {
-    const clientes = await api('/clientes');
-    renderTabla('tablaClientes', clientes, c => `<tr>
+    _clientesCache = await api('/clientes');
+    renderClientes(_clientesCache);
+}
+
+function renderClientes(lista) {
+    renderTabla('tablaClientes', lista, c => `<tr>
         <td>#${c.id}</td>
-        <td>${c.nombre || '—'}</td>
-        <td style="font-family:monospace"><a href="https://wa.me/${c.whatsapp}" target="_blank" style="color:var(--accent)">${c.whatsapp}</a></td>
+        <td>${c.nombre || '<span style="color:var(--text-muted)">Sin nombre</span>'}</td>
+        <td style="font-family:monospace;font-size:13px">
+            <a href="https://wa.me/${c.whatsapp}" target="_blank" style="color:var(--accent)">${c.whatsapp}</a>
+        </td>
+        <td style="text-align:center">
+            <span class="badge ${c.puntos > 0 ? 'info' : ''}" style="min-width:48px">⭐ ${c.puntos || 0}</span>
+        </td>
+        <td style="text-align:center;color:var(--text-muted)">${c.total_compras || 0}</td>
         <td style="font-size:12px;color:var(--text-muted)">${formatFecha(c.registrado_en)}</td>
-        <td><a href="https://wa.me/${c.whatsapp}" target="_blank" class="neon-btn btn-sm btn-outline">💬 Escribir</a></td>
-    </tr>`, 5);
+        <td style="display:flex;gap:6px">
+            <button class="neon-btn btn-sm" onclick="verCliente(${c.id})">Ver</button>
+            <a href="https://wa.me/${c.whatsapp}" target="_blank" class="neon-btn btn-sm btn-outline">💬</a>
+        </td>
+    </tr>`, 7);
+}
+
+function filtrarClientes(q) {
+    if (!q) return renderClientes(_clientesCache);
+    const term = q.toLowerCase();
+    renderClientes(_clientesCache.filter(c =>
+        (c.nombre || '').toLowerCase().includes(term) ||
+        c.whatsapp.includes(term)
+    ));
+}
+
+async function verCliente(id) {
+    const data = await api(`/clientes/${id}`);
+    document.getElementById('clienteDetalleId').value       = id;
+    document.getElementById('modalClienteTitulo').textContent = data.nombre || data.whatsapp;
+    document.getElementById('detallePuntos').textContent     = data.puntos || 0;
+    document.getElementById('detalleCompras').textContent    = data.total_compras || 0;
+    document.getElementById('puntosAjusteCantidad').value    = '';
+    document.getElementById('puntosAjusteMotivo').value      = '';
+
+    // Historial de puntos
+    renderTabla('tablaHistorialPuntos', data.historial || [], h => `<tr>
+        <td><span class="badge ${h.tipo === 'ganado' ? 'active' : 'closed'}">${h.tipo === 'ganado' ? '+ ganado' : '− canjeado'}</span></td>
+        <td style="font-weight:600;color:${h.tipo === 'ganado' ? 'var(--success)' : 'var(--danger)'}">${h.tipo === 'ganado' ? '+' : '-'}${h.cantidad}</td>
+        <td style="color:var(--text-muted);font-size:12px">${h.motivo || '—'}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${formatFecha(h.fecha)}</td>
+    </tr>`, 4);
+
+    abrirModal('modalCliente');
+}
+
+async function ajustarPuntos(tipo) {
+    const id       = document.getElementById('clienteDetalleId').value;
+    const cantidad = parseInt(document.getElementById('puntosAjusteCantidad').value);
+    const motivo   = document.getElementById('puntosAjusteMotivo').value.trim();
+
+    if (!cantidad || cantidad < 1) return mostrarToast('❌ Ingresa una cantidad válida');
+
+    const res = await api(`/clientes/${id}/puntos`, 'POST', { cantidad, tipo, motivo });
+    if (res.error) return mostrarToast('❌ ' + res.error);
+
+    mostrarToast(`✅ Puntos ${tipo === 'ganado' ? 'agregados' : 'descontados'} correctamente`);
+    verCliente(id);       // refrescar modal
+    cargarClientes();     // refrescar tabla
 }
 
 // ── VENTAS ────────────────────────────────
@@ -434,6 +718,7 @@ async function guardarConfig() {
         nombre_empresa: document.getElementById('cfgNombreEmpresa').value.trim(),
         nombre_bot:     document.getElementById('cfgNombreBot').value.trim(),
         moneda:         document.getElementById('cfgMoneda').value,
+        tipo_cambio:    document.getElementById('cfgTipoCambio').value.trim(),
         prompt_sistema: document.getElementById('cfgPrompt').value.trim()
     };
     await api('/config', 'POST', data);

@@ -98,11 +98,20 @@ async function conectar(io) {
 }
 
 async function procesarMensaje(msg) {
-    const db       = require('../db/database');
-    const jid      = msg.key.remoteJid;
-    const texto    = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-    const nombre   = msg.pushName || 'Cliente';
-    const numero   = jid.split('@')[0];
+    const db     = require('../db/database');
+    const jid    = msg.key.remoteJid;
+    const nombre = msg.pushName || 'Cliente';
+    const numero = jid.split('@')[0];
+
+    const msgContent = msg.message || {};
+    const texto = (
+        msgContent.conversation ||
+        msgContent.extendedTextMessage?.text ||
+        msgContent.imageMessage?.caption ||
+        ''
+    ).trim();
+
+    const esImagen = !!(msgContent.imageMessage || msgContent.documentMessage);
 
     // Determinar si es admin
     const adminRow = db.prepare('SELECT * FROM admins WHERE telefono = ? AND activo = 1').get(numero);
@@ -110,6 +119,8 @@ async function procesarMensaje(msg) {
 
     if (esAdmin) {
         await adminHandler.manejar({ sock, jid, texto, numero, nombre, adminRow, db });
+    } else if (esImagen) {
+        await clientHandler.manejarImagen({ sock, jid, numero, nombre, db });
     } else {
         await clientHandler.manejar({ sock, jid, texto, numero, nombre, db });
     }

@@ -9,6 +9,22 @@
 <body>
 
 <!-- ══════════════════════════════════════════
+     FONDOS DINÁMICOS + PARALLAX
+══════════════════════════════════════════ -->
+<div id="parallax-wrapper">
+    <div class="bg-layer active" id="bg-hub"></div>
+    <div class="bg-layer" id="bg-dashboard"></div>
+    <div class="bg-layer" id="bg-pedidos"></div>
+    <div class="bg-layer" id="bg-catalogo"></div>
+    <div class="bg-layer" id="bg-clientes"></div>
+    <div class="bg-layer" id="bg-ventas"></div>
+    <div class="bg-layer" id="bg-admins"></div>
+    <div class="bg-layer" id="bg-bot"></div>
+    <div class="bg-layer" id="bg-config"></div>
+</div>
+<div class="ambient-overlay"></div>
+
+<!-- ══════════════════════════════════════════
      LOGIN
 ══════════════════════════════════════════ -->
 <div id="auth-container">
@@ -184,7 +200,7 @@
                 <h1>Catálogo de Servicios</h1>
                 <p>Administra los servicios y cuentas de streaming</p>
             </div>
-            <button class="neon-btn" onclick="abrirModal('modalServicio')">+ Agregar servicio</button>
+            <button class="neon-btn" onclick="abrirModalServicio()">+ Agregar servicio</button>
         </div>
 
         <div class="catalog-grid" id="gridServicios">
@@ -210,12 +226,25 @@
     <main id="clientes-view" class="view-section">
         <div class="section-header">
             <div><h1>Clientes</h1><p>Usuarios que han contactado al bot</p></div>
+            <div style="display:flex;gap:12px;align-items:center">
+                <input type="text" id="buscarCliente" class="input-search" placeholder="🔍 Buscar por nombre o número..." oninput="filtrarClientes(this.value)">
+            </div>
         </div>
         <div class="glass-panel table-container">
             <table>
-                <thead><tr><th>#</th><th>Nombre</th><th>WhatsApp</th><th>Registrado</th><th>Acciones</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>WhatsApp</th>
+                        <th style="text-align:center">⭐ Puntos</th>
+                        <th style="text-align:center">🛒 Compras</th>
+                        <th>Registrado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
                 <tbody id="tablaClientes">
-                    <tr><td colspan="5" style="text-align:center;padding:32px">Cargando...</td></tr>
+                    <tr><td colspan="7" style="text-align:center;padding:32px">Cargando...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -335,14 +364,20 @@
                     <label>Nombre del bot</label>
                     <input type="text" id="cfgNombreBot" placeholder="PinguBot">
                 </div>
-                <div class="input-group">
-                    <label>Moneda</label>
-                    <select id="cfgMoneda">
-                        <option value="Bs">BOB (Bs.)</option>
-                        <option value="USD">USD ($)</option>
-                    </select>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="input-group" style="margin:0">
+                        <label>Moneda principal</label>
+                        <select id="cfgMoneda">
+                            <option value="Bs">BOB (Bs.)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="margin:0">
+                        <label>Tipo de cambio (Bs/$)</label>
+                        <input type="number" id="cfgTipoCambio" placeholder="6.96" step="0.01" min="1">
+                    </div>
                 </div>
-                <button class="neon-btn btn-outline" onclick="guardarConfig()">Actualizar perfil</button>
+                <button class="neon-btn btn-outline" onclick="guardarConfig()" style="margin-top:16px">Actualizar perfil</button>
             </div>
 
             <div class="glass-panel settings-card">
@@ -386,21 +421,68 @@
      MODALES
 ══════════════════════════════════════════ -->
 
-<!-- Modal: Agregar Servicio -->
+<!-- Modal: Agregar / Editar Servicio -->
 <div class="modal-overlay" id="modalServicio">
-    <div class="modal">
+    <div class="modal" style="max-width:560px">
         <div class="modal-header">
-            <h2 class="modal-title">Agregar servicio</h2>
+            <h2 class="modal-title" id="modalServicioTitulo">Agregar servicio</h2>
             <button class="modal-close" onclick="cerrarModal('modalServicio')">✕</button>
         </div>
-        <div class="input-group">
-            <label>Nombre del servicio</label>
-            <input type="text" id="svcNombre" placeholder="Netflix, Crunchyroll...">
+        <input type="hidden" id="svcId">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="input-group" style="grid-column:1/-1">
+                <label>Nombre del servicio</label>
+                <input type="text" id="svcNombre" placeholder="Netflix, Crunchyroll...">
+            </div>
+            <div class="input-group" style="grid-column:1/-1">
+                <label>Descripción (opcional)</label>
+                <input type="text" id="svcDesc" placeholder="Plataforma de streaming de video">
+            </div>
+
+            <!-- Precios -->
+            <div class="input-group">
+                <label>💰 Precio de venta (USD)</label>
+                <input type="number" id="svcPrecioUsd" placeholder="ej: 4.50" step="0.01" min="0"
+                       oninput="calcularPreciosBs()">
+            </div>
+            <div class="input-group">
+                <label>🔒 Costo real (USD) <span style="color:var(--text-muted);font-size:11px">privado</span></label>
+                <input type="number" id="svcCostoUsd" placeholder="ej: 2.00" step="0.01" min="0"
+                       oninput="calcularPreciosBs()">
+            </div>
+            <div class="input-group">
+                <label>Margen mínimo (%)</label>
+                <input type="number" id="svcMargen" placeholder="20" min="0" max="100" value="20"
+                       oninput="calcularPreciosBs()">
+            </div>
+            <div class="input-group">
+                <label>Tipo de cambio (Bs/$)</label>
+                <input type="number" id="svcTipoCambio" placeholder="6.96" step="0.01" min="1" readonly
+                       style="opacity:0.6;cursor:not-allowed">
+            </div>
         </div>
-        <div class="input-group">
-            <label>Descripción (opcional)</label>
-            <input type="text" id="svcDesc" placeholder="Plataforma de streaming de video">
+
+        <!-- Preview de precios calculados -->
+        <div id="preciosPreview" class="glass-panel" style="padding:14px;border-radius:12px;margin:4px 0 16px;display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted)">Precio venta</div>
+                    <div style="font-size:18px;font-weight:700;color:white">
+                        $<span id="pvUsd">0.00</span> <span style="color:var(--text-muted);font-size:13px">/ Bs <span id="pvBs">0.00</span></span>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted)">Ganancia</div>
+                    <div id="pvMargen" style="font-size:18px;font-weight:700">—</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted)">Precio mínimo seguro</div>
+                    <div style="font-size:13px;color:var(--warning)">$<span id="pvMinUsd">—</span> / Bs <span id="pvMinBs">—</span></div>
+                </div>
+            </div>
         </div>
+
         <div class="input-group">
             <label>Imagen de portada</label>
             <div class="upload-area" onclick="document.getElementById('svcImgInput').click()">
@@ -516,6 +598,116 @@
         <div class="modal-footer">
             <button class="neon-btn btn-outline" onclick="cerrarModal('modalPago')">Cancelar</button>
             <button class="neon-btn" onclick="guardarPago()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Perfiles de una cuenta -->
+<div class="modal-overlay" id="modalPerfiles">
+    <div class="modal" style="max-width:640px">
+        <div class="modal-header">
+            <h2 class="modal-title" id="modalPerfilesTitulo">Perfiles</h2>
+            <button class="modal-close" onclick="cerrarModal('modalPerfiles')">✕</button>
+        </div>
+        <input type="hidden" id="perfilesCuentaId">
+
+        <!-- Agregar perfil -->
+        <div class="glass-panel" style="padding:14px;border-radius:12px;margin-bottom:16px">
+            <h4 style="font-size:13px;margin-bottom:10px">+ Agregar perfil</h4>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                <div class="input-group" style="margin:0;flex:2;min-width:120px">
+                    <label>Nombre del perfil</label>
+                    <input type="text" id="perfilNombre" placeholder="ej: Perfil 1">
+                </div>
+                <div class="input-group" style="margin:0;flex:1;min-width:80px">
+                    <label>PIN (opcional)</label>
+                    <input type="text" id="perfilPin" placeholder="1234">
+                </div>
+                <div class="input-group" style="margin:0;flex:1;min-width:80px">
+                    <label>Precio venta (Bs)</label>
+                    <input type="number" id="perfilPrecio" placeholder="35" step="0.5">
+                </div>
+                <button class="neon-btn btn-sm" onclick="agregarPerfil()" style="height:42px">Agregar</button>
+            </div>
+        </div>
+
+        <!-- Lista de perfiles -->
+        <div class="glass-panel table-container" style="max-height:320px;overflow-y:auto;margin-bottom:0">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Perfil</th>
+                        <th>PIN</th>
+                        <th>Estado</th>
+                        <th>Cliente</th>
+                        <th>Vence</th>
+                        <th>Precio</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tablaPerfiles">
+                    <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted)">Sin perfiles</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="modal-footer">
+            <button class="neon-btn btn-outline" onclick="cerrarModal('modalPerfiles')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Detalle de Cliente -->
+<div class="modal-overlay" id="modalCliente">
+    <div class="modal" style="max-width:600px">
+        <div class="modal-header">
+            <h2 class="modal-title" id="modalClienteTitulo">Cliente</h2>
+            <button class="modal-close" onclick="cerrarModal('modalCliente')">✕</button>
+        </div>
+        <input type="hidden" id="clienteDetalleId">
+
+        <!-- Resumen -->
+        <div style="display:flex;gap:16px;margin-bottom:24px">
+            <div class="glass-panel" style="flex:1;padding:16px;text-align:center;border-radius:12px">
+                <div style="font-size:28px;font-weight:700;color:var(--accent)" id="detallePuntos">0</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px">⭐ Puntos acumulados</div>
+            </div>
+            <div class="glass-panel" style="flex:1;padding:16px;text-align:center;border-radius:12px">
+                <div style="font-size:28px;font-weight:700;color:var(--success)" id="detalleCompras">0</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px">🛒 Compras totales</div>
+            </div>
+        </div>
+
+        <!-- Ajuste manual de puntos -->
+        <div class="glass-panel" style="padding:16px;border-radius:12px;margin-bottom:20px">
+            <h4 style="margin-bottom:12px;font-size:14px">Ajustar puntos manualmente</h4>
+            <div style="display:flex;gap:10px;align-items:flex-end">
+                <div class="input-group" style="margin:0;flex:1">
+                    <label>Cantidad</label>
+                    <input type="number" id="puntosAjusteCantidad" placeholder="ej: 50" min="1">
+                </div>
+                <div class="input-group" style="margin:0;flex:1">
+                    <label>Motivo</label>
+                    <input type="text" id="puntosAjusteMotivo" placeholder="Compensación, regalo...">
+                </div>
+                <button class="neon-btn btn-sm" onclick="ajustarPuntos('ganado')" style="height:42px;white-space:nowrap">+ Agregar</button>
+                <button class="neon-btn btn-sm btn-danger" onclick="ajustarPuntos('canjeado')" style="height:42px;white-space:nowrap">− Descontar</button>
+            </div>
+        </div>
+
+        <!-- Historial de puntos -->
+        <h4 style="font-size:14px;color:var(--text-muted);margin-bottom:10px">Historial de puntos</h4>
+        <div class="glass-panel table-container" style="max-height:200px;overflow-y:auto;margin-bottom:0">
+            <table>
+                <thead><tr><th>Tipo</th><th>Puntos</th><th>Motivo</th><th>Fecha</th></tr></thead>
+                <tbody id="tablaHistorialPuntos">
+                    <tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text-muted)">Sin movimientos</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="modal-footer">
+            <button class="neon-btn btn-outline" onclick="cerrarModal('modalCliente')">Cerrar</button>
         </div>
     </div>
 </div>

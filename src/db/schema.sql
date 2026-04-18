@@ -24,16 +24,32 @@ CREATE TABLE IF NOT EXISTS clientes (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     whatsapp        TEXT UNIQUE NOT NULL,
     nombre          TEXT,
+    puntos          INTEGER NOT NULL DEFAULT 0,
+    total_compras   INTEGER NOT NULL DEFAULT 0,
     registrado_en   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Historial de movimientos de puntos por cliente
+CREATE TABLE IF NOT EXISTS puntos_historial (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id  INTEGER NOT NULL,
+    tipo        TEXT NOT NULL DEFAULT 'ganado', -- 'ganado' | 'canjeado'
+    cantidad    INTEGER NOT NULL,
+    motivo      TEXT,
+    fecha       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
 
 -- Servicios de streaming (Netflix, Crunchyroll, etc.)
 CREATE TABLE IF NOT EXISTS servicios (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre      TEXT NOT NULL,
-    descripcion TEXT,
-    imagen      TEXT,  -- nombre del archivo en /img/servicios/
-    activo      INTEGER NOT NULL DEFAULT 1
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre          TEXT NOT NULL,
+    descripcion     TEXT,
+    imagen          TEXT,       -- nombre del archivo en /img/servicios/
+    precio_usd      REAL,       -- precio de venta en dólares
+    costo_usd       REAL,       -- precio de costo en dólares (privado)
+    margen_minimo   REAL NOT NULL DEFAULT 20,  -- % mínimo de ganancia
+    activo          INTEGER NOT NULL DEFAULT 1
 );
 
 -- Cuentas de streaming (cada fila = una cuenta completa)

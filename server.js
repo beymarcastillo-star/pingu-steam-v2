@@ -26,6 +26,7 @@ app.use('/api/auth',      require('./src/api/routes/auth'));
 app.use('/api/config',    require('./src/api/routes/config'));
 app.use('/api/servicios', require('./src/api/routes/servicios'));
 app.use('/api/cuentas',   require('./src/api/routes/cuentas'));
+app.use('/api/perfiles',  require('./src/api/routes/perfiles'));
 app.use('/api/pedidos',   require('./src/api/routes/pedidos'));
 app.use('/api/clientes',  require('./src/api/routes/clientes'));
 app.use('/api/admins',    require('./src/api/routes/admins'));

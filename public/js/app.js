@@ -802,7 +802,9 @@ async function cargarConversaciones() {
 
 async function verHilo(numero, nombre) {
     _hiloNumeroActual = numero;
-    document.getElementById('hiloTitulo').textContent = `${nombre} · ${numero}`;
+    document.getElementById('hiloTitulo').textContent = nombre;
+    const hiloNum = document.getElementById('hiloNumero');
+    if (hiloNum) hiloNum.textContent = `📱 +${numero}`;
     document.getElementById('hiloBorrarBtn').dataset.numero = numero;
 
     const msgs = await api(`/conversaciones/${numero}`);

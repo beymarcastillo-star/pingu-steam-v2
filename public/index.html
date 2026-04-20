@@ -392,7 +392,10 @@
         <div class="modal-overlay" id="modalHilo">
             <div class="modal" style="max-width:520px;max-height:80vh;display:flex;flex-direction:column">
                 <div class="modal-header">
-                    <h2 class="modal-title" id="hiloTitulo">Conversación</h2>
+                    <div>
+                        <h2 class="modal-title" id="hiloTitulo">Conversación</h2>
+                        <p id="hiloNumero" style="font-size:12px;color:var(--text-muted);margin:2px 0 0;font-weight:400"></p>
+                    </div>
                     <button class="modal-close" onclick="cerrarModal('modalHilo')">✕</button>
                 </div>
                 <div id="hiloMensajes" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 0"></div>

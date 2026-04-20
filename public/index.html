@@ -61,7 +61,7 @@
             <button onclick="switchView('clientes-view')"  id="btn-clientes">Clientes</button>
             <button onclick="switchView('ventas-view')"    id="btn-ventas">Ventas</button>
             <button onclick="switchView('admins-view')"    id="btn-admins">Admins</button>
-            <button onclick="switchView('pagos-view')"     id="btn-pagos">💳 Pagos</button>
+            <button onclick="switchView('pagos-view')"     id="btn-pagos">Pagos</button>
             <button onclick="switchView('bot-view')"       id="btn-bot">Bot WA</button>
             <button onclick="switchView('config-view')"    id="btn-config">Config</button>
             <button onclick="openHub()" style="color:var(--text-muted)">⊞ Hub</button>
@@ -310,16 +310,25 @@
             <div class="glass-panel bot-status-card">
                 <h3>Vincular Dispositivo</h3>
                 <div class="qr-box" id="qrBox">
-                    <span style="font-size:32px">📱</span>
+                    <span style="font-size:38px">📱</span>
                     <span>Esperando QR...</span>
-                    <span style="font-size:11px">Inicia el bot para conectar</span>
+                    <span style="font-size:11px;text-align:center;line-height:1.5">Inicia el bot<br>para conectar</span>
                 </div>
+                <p class="qr-caption" id="qrCaption">Escanea con WhatsApp</p>
                 <button class="neon-btn btn-outline" style="width:100%" onclick="reconectarBot()">🔄 Reconectar</button>
-                <div style="margin-top:24px;text-align:left;width:100%">
-                    <h4 style="color:var(--text-muted);margin-bottom:12px;font-size:13px">Estadísticas del bot</h4>
-                    <p style="margin-bottom:6px;font-size:14px">Número admin: <strong id="botNumero" style="color:white">—</strong></p>
-                    <p style="margin-bottom:6px;font-size:14px">Clientes totales: <strong id="botClientes" style="color:var(--success)">0</strong></p>
-                    <p style="font-size:14px">Métodos de pago: <strong id="botMetodos" style="color:var(--accent)">0</strong></p>
+                <div class="bot-stats">
+                    <div class="bot-stat-row">
+                        <span>Número admin</span>
+                        <strong id="botNumero">—</strong>
+                    </div>
+                    <div class="bot-stat-row">
+                        <span>Clientes totales</span>
+                        <strong style="color:var(--success)" id="botClientes">0</strong>
+                    </div>
+                    <div class="bot-stat-row">
+                        <span>Métodos de pago</span>
+                        <strong style="color:var(--accent)" id="botMetodos">0</strong>
+                    </div>
                 </div>
             </div>
             <div class="glass-panel bot-settings">

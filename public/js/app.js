@@ -138,9 +138,12 @@ function initSocket() {
     const socket = io();
 
     socket.on('qr', (qrData) => {
-        // Mostrar QR como imagen usando la API de Google Charts (sin dependencia extra)
-        const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
-        document.getElementById('qrBox').innerHTML = `<img src="${url}" alt="QR"><p>Escanea con WhatsApp</p>`;
+        const url  = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+        const box  = document.getElementById('qrBox');
+        box.innerHTML = `<img src="${url}" alt="QR">`;
+        box.classList.add('qr-ready');
+        const cap = document.getElementById('qrCaption');
+        if (cap) cap.style.color = 'var(--success)';
     });
 
     let _convDebounce = null;
@@ -156,6 +159,8 @@ function initSocket() {
         const pill   = document.getElementById('waPill');
         const waText = document.getElementById('waStatus');
         const badge  = document.getElementById('botBadge');
+        const box    = document.getElementById('qrBox');
+        const cap    = document.getElementById('qrCaption');
 
         pill.className = 'status-pill ' + (status === 'connected' ? 'connected' : status === 'connecting' ? 'connecting' : 'disconnected');
 
@@ -165,6 +170,19 @@ function initSocket() {
         if (badge) {
             badge.className = 'badge ' + (status === 'connected' ? 'active' : status === 'connecting' ? 'pending' : 'closed');
             badge.textContent = labels[status] || status;
+        }
+
+        if (status === 'connected' && box) {
+            box.innerHTML = `<span style="font-size:42px">✅</span><span style="font-size:13px;font-weight:600;color:var(--success)">Conectado</span>`;
+            box.classList.remove('qr-ready');
+            box.style.borderColor = 'var(--success)';
+            box.style.borderStyle = 'solid';
+            if (cap) { cap.textContent = 'WhatsApp vinculado'; cap.style.color = 'var(--success)'; }
+        } else if (status === 'disconnected' && box && !box.querySelector('img')) {
+            box.classList.remove('qr-ready');
+            box.style.borderColor = '';
+            box.style.borderStyle = '';
+            if (cap) { cap.textContent = 'Escanea con WhatsApp'; cap.style.color = ''; }
         }
     });
 }

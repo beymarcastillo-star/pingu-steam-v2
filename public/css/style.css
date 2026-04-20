@@ -566,6 +566,20 @@ tr:last-child td { border-bottom: none; }
 .setting-info h4 { margin-bottom: 4px; font-size: 14px; }
 .setting-info p  { font-size: 12px; color: var(--text-muted); }
 
+/* ── GRUPO CHECKBOXES ────────────────────── */
+.grupo-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    font-size: 13px; cursor: pointer;
+    transition: background 0.15s;
+}
+.grupo-item:hover { background: rgba(255,255,255,0.07); }
+.grupo-item input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+.grupo-item-info { flex: 1; margin-left: 10px; }
+.grupo-item-info strong { display: block; font-size: 13px; }
+.grupo-item-info span   { font-size: 11px; color: var(--text-muted); }
+
 /* ── SETTINGS ────────────────────────────── */
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .settings-card { padding: 28px; }

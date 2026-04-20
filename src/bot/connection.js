@@ -116,10 +116,39 @@ async function conectar(io) {
         if (!msg || msg.key.fromMe) return;
         const jid = msg.key.remoteJid || '';
         if (jid.includes('status@broadcast') || jid === 'status') return;
+
+        const db = require('../db/database');
+
         if (jid.includes('@g.us')) {
-            const db = require('../db/database');
             if (db.getConfig('grupos_activo', '0') !== '1') return;
+
+            // Verificar grupo en lista permitida ([] = todos)
+            const permitidos = JSON.parse(db.getConfig('grupos_permitidos', '[]'));
+            if (permitidos.length > 0 && !permitidos.includes(jid)) return;
+
+            // Solo cuando mencionan al bot
+            if (db.getConfig('grupos_solo_mencion', '0') === '1') {
+                const botNum  = sock.user?.id?.split(':')[0]?.split('@')[0];
+                const mencionados = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (!mencionados.some(m => m.startsWith(botNum))) return;
+            }
         }
+
+        // Horario de atención
+        if (db.getConfig('horario_activo', '0') === '1') {
+            const ahora  = new Date();
+            const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+            const [h1, m1] = db.getConfig('horario_inicio', '08:00').split(':').map(Number);
+            const [h2, m2] = db.getConfig('horario_fin',    '22:00').split(':').map(Number);
+            if (minAhora < h1 * 60 + m1 || minAhora > h2 * 60 + m2) {
+                const msgAusencia = db.getConfig('horario_mensaje', '')
+                    .replace('{inicio}', db.getConfig('horario_inicio', '08:00'))
+                    .replace('{fin}',    db.getConfig('horario_fin',    '22:00'));
+                if (msgAusencia) sock.sendMessage(jid, { text: msgAusencia }).catch(() => {});
+                return;
+            }
+        }
+
         try { await procesarMensaje(msg); }
         catch (e) { console.error('Error al procesar mensaje:', e.message); }
     });
@@ -169,4 +198,14 @@ function emitirAdmin(evento, dato) {
     if (ioRef) ioRef.emit(evento, dato);
 }
 
-module.exports = { conectar, enviar, desconectar, reconectar, emitirAdmin };
+async function obtenerGrupos() {
+    if (!sock) throw new Error('Bot no conectado');
+    const grupos = await sock.groupFetchAllParticipating();
+    return Object.values(grupos).map(g => ({
+        id:           g.id,
+        nombre:       g.subject,
+        participantes: g.participants?.length || 0
+    }));
+}
+
+module.exports = { conectar, enviar, desconectar, reconectar, emitirAdmin, obtenerGrupos };

@@ -354,12 +354,52 @@
                     </div>
                     <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
                 </div>
-                <div class="setting-row" style="border-bottom:none">
+                <div class="setting-row">
                     <div class="setting-info">
                         <h4>Responder en Grupos</h4>
                         <p>El bot participa en grupos de WhatsApp donde esté agregado</p>
                     </div>
                     <label class="switch"><input type="checkbox" id="switchGrupos" onchange="toggleGrupos(this.checked)"><span class="slider"></span></label>
+                </div>
+                <!-- Panel de grupos (visible solo cuando switchGrupos está ON) -->
+                <div id="gruposPanel" style="display:none;margin:4px 0 16px;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--glass-border)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                        <span style="font-size:13px;font-weight:600">Grupos disponibles</span>
+                        <button class="neon-btn btn-sm btn-outline" onclick="cargarGrupos()">🔄 Actualizar lista</button>
+                    </div>
+                    <div id="listaGrupos" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+                        <p style="font-size:12px;color:var(--text-muted)">Pulsa "Actualizar lista" para ver los grupos donde está el bot</p>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--glass-border)">
+                        <div>
+                            <p style="font-size:13px;font-weight:600;margin:0">Solo cuando me mencionan (@)</p>
+                            <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0">Responde solo si alguien escribe @bot en el grupo</p>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="switchSoloMencion" onchange="guardarOpcionBot('grupos_solo_mencion', this.checked)"><span class="slider"></span></label>
+                    </div>
+                </div>
+                <div class="setting-row" style="border-bottom:none">
+                    <div class="setting-info">
+                        <h4>Horario de Atención</h4>
+                        <p>El bot solo responde dentro del horario configurado</p>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="switchHorario" onchange="toggleHorario(this.checked)"><span class="slider"></span></label>
+                </div>
+                <div id="horarioPanel" style="display:none;margin:4px 0 16px;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--glass-border)">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                        <div class="input-group" style="margin:0">
+                            <label>Hora inicio</label>
+                            <input type="time" id="horarioInicio" value="08:00" onchange="guardarHorario()">
+                        </div>
+                        <div class="input-group" style="margin:0">
+                            <label>Hora fin</label>
+                            <input type="time" id="horarioFin" value="22:00" onchange="guardarHorario()">
+                        </div>
+                    </div>
+                    <div class="input-group" style="margin:0">
+                        <label>Mensaje fuera de horario</label>
+                        <input type="text" id="horarioMensaje" placeholder="Ej: Nuestro horario es de {inicio} a {fin} 🕐" onchange="guardarHorario()">
+                    </div>
                 </div>
                 <div class="input-group" style="margin-top:24px">
                     <label>Prompt del sistema (comportamiento de la IA)</label>

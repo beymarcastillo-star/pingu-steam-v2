@@ -747,11 +747,79 @@ async function cargarBotStats() {
         document.getElementById('cfgPrompt').value = config.prompt_sistema;
 
     const sw = document.getElementById('switchGrupos');
-    if (sw) sw.checked = config.grupos_activo === '1';
+    if (sw) {
+        sw.checked = config.grupos_activo === '1';
+        document.getElementById('gruposPanel').style.display = sw.checked ? 'block' : 'none';
+    }
+    const swM = document.getElementById('switchSoloMencion');
+    if (swM) swM.checked = config.grupos_solo_mencion === '1';
+
+    const swH = document.getElementById('switchHorario');
+    if (swH) {
+        swH.checked = config.horario_activo === '1';
+        document.getElementById('horarioPanel').style.display = swH.checked ? 'block' : 'none';
+    }
+    if (config.horario_inicio) document.getElementById('horarioInicio').value = config.horario_inicio;
+    if (config.horario_fin)    document.getElementById('horarioFin').value    = config.horario_fin;
+    if (config.horario_mensaje !== undefined) document.getElementById('horarioMensaje').value = config.horario_mensaje;
 }
 
 async function toggleGrupos(activo) {
     await api('/config', { method: 'POST', body: JSON.stringify({ grupos_activo: activo }) });
+    document.getElementById('gruposPanel').style.display = activo ? 'block' : 'none';
+    if (activo) cargarGrupos();
+}
+
+async function cargarGrupos() {
+    const lista = document.getElementById('listaGrupos');
+    lista.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">Cargando grupos...</p>';
+    try {
+        const [grupos, config] = await Promise.all([
+            api('/bot/groups'),
+            api('/config/public')
+        ]);
+        const permitidos = JSON.parse(config.grupos_permitidos || '[]');
+        if (!grupos.length) {
+            lista.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No se encontraron grupos. Asegúrate de que el bot esté conectado y en algún grupo.</p>';
+            return;
+        }
+        lista.innerHTML = grupos.map(g => `
+            <label class="grupo-item">
+                <input type="checkbox" ${permitidos.includes(g.id) || permitidos.length === 0 ? 'checked' : ''}
+                    onchange="toggleGrupoPermitido('${g.id}', this.checked)">
+                <div class="grupo-item-info">
+                    <strong>${g.nombre}</strong>
+                    <span>${g.participantes} participantes</span>
+                </div>
+            </label>`).join('');
+    } catch {
+        lista.innerHTML = '<p style="font-size:12px;color:var(--danger)">No se pudo obtener la lista. El bot debe estar conectado.</p>';
+    }
+}
+
+async function toggleGrupoPermitido(jid, activo) {
+    const config = await api('/config/public');
+    let lista = JSON.parse(config.grupos_permitidos || '[]');
+    if (activo) { if (!lista.includes(jid)) lista.push(jid); }
+    else        { lista = lista.filter(j => j !== jid); }
+    await api('/config', { method: 'POST', body: JSON.stringify({ grupos_permitidos: lista }) });
+}
+
+async function guardarOpcionBot(clave, valor) {
+    await api('/config', { method: 'POST', body: JSON.stringify({ [clave]: valor }) });
+}
+
+function toggleHorario(activo) {
+    document.getElementById('horarioPanel').style.display = activo ? 'block' : 'none';
+    guardarOpcionBot('horario_activo', activo);
+}
+
+async function guardarHorario() {
+    await api('/config', { method: 'POST', body: JSON.stringify({
+        horario_inicio:  document.getElementById('horarioInicio').value,
+        horario_fin:     document.getElementById('horarioFin').value,
+        horario_mensaje: document.getElementById('horarioMensaje').value
+    })});
 }
 
 function tipoLabel(tipo) {

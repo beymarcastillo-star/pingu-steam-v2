@@ -40,7 +40,13 @@ for (const sql of migraciones) {
 // Valores de config que pueden no existir aún
 const configExtras = [
     ['tipo_cambio', '6.96'],
-    ['grupos_activo', '0'],
+    ['grupos_activo',        '0'],
+    ['grupos_permitidos',    '[]'],
+    ['grupos_solo_mencion',  '0'],
+    ['horario_activo',       '0'],
+    ['horario_inicio',       '08:00'],
+    ['horario_fin',          '22:00'],
+    ['horario_mensaje',      '¡Hola! Nuestro horario de atención es de {inicio} a {fin}. Te responderemos pronto 😊'],
     ['puntos_por_compra_baja',  '5'],
     ['puntos_por_compra_media', '15'],
     ['puntos_por_compra_alta',  '30'],

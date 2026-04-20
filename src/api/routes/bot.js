@@ -2,6 +2,15 @@ const router    = require('express').Router();
 const bot       = require('../../bot/connection');
 const aiService = require('../../services/aiService');
 
+router.get('/groups', async (_req, res) => {
+    try {
+        const grupos = await bot.obtenerGrupos();
+        res.json(grupos);
+    } catch (e) {
+        res.status(503).json({ error: e.message });
+    }
+});
+
 router.post('/reconnect', (req, res) => {
     bot.reconectar();
     res.json({ ok: true });

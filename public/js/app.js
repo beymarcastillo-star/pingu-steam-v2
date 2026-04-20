@@ -143,9 +143,13 @@ function initSocket() {
         document.getElementById('qrBox').innerHTML = `<img src="${url}" alt="QR"><p>Escanea con WhatsApp</p>`;
     });
 
+    let _convDebounce = null;
     socket.on('nueva-conversacion', () => {
-        // Refrescar lista si el bot-view está visible
-        if (document.getElementById('listaConversaciones')) cargarConversaciones();
+        clearTimeout(_convDebounce);
+        _convDebounce = setTimeout(() => {
+            if (document.getElementById('bot-view')?.classList.contains('active-view'))
+                cargarConversaciones();
+        }, 600);
     });
 
     socket.on('connection-status', (status) => {
@@ -765,22 +769,15 @@ async function cargarConversaciones() {
     lista.innerHTML = rows.map(r => {
         const hora  = new Date(r.ultima_fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
         const icono = r.ultimo_origen === 'bot' ? '🤖' : '👤';
-        const estadoBadge = r.estado === 'humano'
-            ? '<span style="font-size:10px;background:var(--warning);color:#000;padding:1px 6px;border-radius:8px;margin-left:6px">humano</span>'
-            : '';
-        return `
-        <div onclick="verHilo('${r.numero}','${(r.nombre||r.numero).replace(/'/g,"\\'")}\')"
-             style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.04);transition:background 0.2s"
-             onmouseover="this.style.background='rgba(255,255,255,0.08)'"
-             onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-            <div style="width:38px;height:38px;border-radius:50%;background:var(--glass-border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
-                ${r.nombre?.[0]?.toUpperCase() || '?'}
+        const badge = r.estado === 'humano' ? '<span class="conv-humano">humano</span>' : '';
+        const nombreSeguro = (r.nombre || r.numero).replace(/'/g, "\\'");
+        return `<div class="conv-item" onclick="verHilo('${r.numero}','${nombreSeguro}')">
+            <div class="conv-avatar">${r.nombre?.[0]?.toUpperCase() || '?'}</div>
+            <div class="conv-info">
+                <div class="conv-name">${r.nombre || r.numero}${badge}</div>
+                <div class="conv-preview">${icono} ${r.ultimo_mensaje}</div>
             </div>
-            <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:600;color:white">${r.nombre || r.numero}${estadoBadge}</div>
-                <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icono} ${r.ultimo_mensaje}</div>
-            </div>
-            <div style="font-size:11px;color:var(--text-muted);flex-shrink:0">${hora}</div>
+            <div class="conv-time">${hora}</div>
         </div>`;
     }).join('');
 }
@@ -794,21 +791,15 @@ async function verHilo(numero, nombre) {
     const cont  = document.getElementById('hiloMensajes');
 
     cont.innerHTML = msgs.map(m => {
-        const esBot  = m.origen === 'bot';
-        const hora   = new Date(m.fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
-        return `
-        <div style="display:flex;flex-direction:column;align-items:${esBot ? 'flex-end' : 'flex-start'}">
-            <div style="max-width:80%;padding:8px 12px;border-radius:${esBot ? '14px 14px 4px 14px' : '14px 14px 14px 4px'};
-                        background:${esBot ? 'var(--primary)' : 'rgba(255,255,255,0.08)'};
-                        font-size:13px;line-height:1.5;white-space:pre-wrap">
-                ${m.mensaje}
-            </div>
-            <span style="font-size:10px;color:var(--text-muted);margin-top:2px">${esBot ? '🤖 Bot' : '👤 Cliente'} · ${hora}</span>
+        const tipo = m.origen === 'bot' ? 'bot' : 'cliente';
+        const hora = new Date(m.fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="msg-wrap ${tipo}">
+            <div class="msg-bubble ${tipo}">${m.mensaje}</div>
+            <span class="msg-meta">${tipo === 'bot' ? '🤖 Bot' : '👤 Cliente'} · ${hora}</span>
         </div>`;
     }).join('');
 
-    // Scroll al final
-    setTimeout(() => cont.scrollTop = cont.scrollHeight, 50);
+    cont.scrollTop = cont.scrollHeight;
     abrirModal('modalHilo');
 }
 

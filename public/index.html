@@ -622,9 +622,9 @@
 
         <div class="input-group">
             <label>Imagen de portada</label>
-            <div class="upload-area" onclick="document.getElementById('svcImgInput').click()">
+            <div class="upload-area" data-target="svcImgInput" onclick="document.getElementById('svcImgInput').click()">
                 <div class="upload-icon">🖼️</div>
-                <p>Haz clic para subir una imagen</p>
+                <p>Arrastra una imagen aquí o haz clic</p>
                 <p style="font-size:11px;margin-top:4px">JPG, PNG — Recomendado 800×500px</p>
                 <img id="svcImgPreview" style="display:none">
             </div>
@@ -725,9 +725,9 @@
         </div>
         <div class="input-group">
             <label>Imagen QR (opcional)</label>
-            <div class="upload-area" onclick="document.getElementById('pagoQRInput').click()">
+            <div class="upload-area" data-target="pagoQRInput" onclick="document.getElementById('pagoQRInput').click()">
                 <div class="upload-icon">📷</div>
-                <p>Sube la imagen de tu QR aquí</p>
+                <p>Arrastra el QR aquí o haz clic</p>
                 <img id="pagoQRPreview" style="display:none;max-width:100%;border-radius:8px;margin-top:8px">
             </div>
             <input type="file" id="pagoQRInput" accept="image/*" style="display:none" onchange="previsualizarImagen(this,'pagoQRPreview')">
@@ -857,9 +857,9 @@
             <button class="modal-close" onclick="cerrarModal('modalImagenServicio')">✕</button>
         </div>
         <input type="hidden" id="imgSvcId">
-        <div class="upload-area" onclick="document.getElementById('imgSvcInput').click()">
+        <div class="upload-area" data-target="imgSvcInput" onclick="document.getElementById('imgSvcInput').click()">
             <div class="upload-icon">🖼️</div>
-            <p>Haz clic para seleccionar una imagen</p>
+            <p>Arrastra una imagen aquí o haz clic</p>
             <img id="imgSvcPreview" style="display:none;max-width:100%;border-radius:8px;margin-top:8px">
         </div>
         <input type="file" id="imgSvcInput" accept="image/*" style="display:none" onchange="previsualizarImagen(this,'imgSvcPreview')">

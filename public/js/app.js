@@ -1043,11 +1043,42 @@ function previsualizarImagen(input, previewId) {
     if (!input.files[0]) return;
     const reader = new FileReader();
     reader.onload = e => {
-        preview.src          = e.target.result;
+        preview.src           = e.target.result;
         preview.style.display = 'block';
     };
     reader.readAsDataURL(input.files[0]);
 }
+
+// ── DRAG & DROP global para todos los .upload-area ──
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.addEventListener('dragover', e => {
+        const area = e.target.closest('.upload-area');
+        if (!area) return;
+        e.preventDefault();
+        area.classList.add('dragover');
+    });
+    document.body.addEventListener('dragleave', e => {
+        const area = e.target.closest('.upload-area');
+        if (area && !area.contains(e.relatedTarget)) area.classList.remove('dragover');
+    });
+    document.body.addEventListener('drop', e => {
+        const area = e.target.closest('.upload-area');
+        if (!area) return;
+        e.preventDefault();
+        area.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const inputId = area.dataset.target;
+        if (!inputId) return;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        // Inyectar el archivo en el input y disparar preview
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change'));
+    });
+});
 
 function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
 function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }

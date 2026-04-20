@@ -835,11 +835,26 @@ async function probarIA() {
     const msg    = input.value.trim();
     if (!msg) return;
 
-    output.style.display = 'block';
-    output.textContent   = '⏳ Pensando...';
+    const hint = output.querySelector('.ia-hint');
+    if (hint) hint.remove();
+
+    const userBubble = document.createElement('div');
+    userBubble.className = 'ia-msg-user';
+    userBubble.textContent = msg;
+    output.appendChild(userBubble);
+
+    const botBubble = document.createElement('div');
+    botBubble.className = 'ia-msg-bot';
+    botBubble.textContent = '⏳ Pensando...';
+    output.appendChild(botBubble);
+    output.scrollTop = output.scrollHeight;
+
+    input.value = '';
+    input.style.height = '';
 
     const res = await api('/bot/test-ia', 'POST', { mensaje: msg });
-    output.textContent = res.respuesta || res.error || 'Sin respuesta';
+    botBubble.textContent = res.respuesta || res.error || 'Sin respuesta';
+    output.scrollTop = output.scrollHeight;
 }
 
 // ── HISTORIAL DE CONVERSACIONES ────────────

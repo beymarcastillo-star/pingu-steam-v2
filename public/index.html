@@ -415,12 +415,25 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
 
             <!-- Probar IA -->
-            <div class="glass-panel" style="padding:28px;display:flex;flex-direction:column;gap:12px">
-                <h3 style="margin:0">🤖 Probar IA</h3>
-                <p style="color:var(--text-muted);font-size:13px;margin:0">Escribe un mensaje y ve cómo responde el bot antes de usarlo con clientes</p>
-                <textarea id="testIAInput" rows="3" placeholder="Ej: ¿Cuánto cuesta Netflix?" style="resize:vertical"></textarea>
-                <button class="neon-btn" onclick="probarIA()">Enviar mensaje de prueba</button>
-                <div id="testIAOutput" style="display:none;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--text-muted)"></div>
+            <div class="glass-panel ia-tester">
+                <div class="ia-header">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <div class="ia-avatar">🤖</div>
+                        <div>
+                            <h3 style="margin:0;font-size:15px">Probar IA</h3>
+                            <p style="margin:0;font-size:11px;color:var(--text-muted)">Simula respuestas del bot</p>
+                        </div>
+                    </div>
+                    <span class="badge active" style="font-size:11px;padding:4px 10px">En vivo</span>
+                </div>
+                <div id="testIAOutput" class="ia-output">
+                    <p class="ia-hint">Escribe un mensaje para probar cómo responde la IA ✨</p>
+                </div>
+                <div class="ia-input-row">
+                    <textarea id="testIAInput" rows="1" placeholder="Ej: ¿Cuánto cuesta Netflix?"
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();probarIA()}"></textarea>
+                    <button class="neon-btn ia-send-btn" onclick="probarIA()" title="Enviar">➤</button>
+                </div>
             </div>
 
             <!-- Historial resumen -->

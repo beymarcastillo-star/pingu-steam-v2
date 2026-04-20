@@ -40,6 +40,7 @@ for (const sql of migraciones) {
 // Valores de config que pueden no existir aún
 const configExtras = [
     ['tipo_cambio', '6.96'],
+    ['grupos_activo', '0'],
     ['puntos_por_compra_baja',  '5'],
     ['puntos_por_compra_media', '15'],
     ['puntos_por_compra_alta',  '30'],

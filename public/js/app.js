@@ -745,6 +745,13 @@ async function cargarBotStats() {
 
     if (config.prompt_sistema && !document.getElementById('cfgPrompt').value)
         document.getElementById('cfgPrompt').value = config.prompt_sistema;
+
+    const sw = document.getElementById('switchGrupos');
+    if (sw) sw.checked = config.grupos_activo === '1';
+}
+
+async function toggleGrupos(activo) {
+    await api('/config', { method: 'POST', body: JSON.stringify({ grupos_activo: activo }) });
 }
 
 function tipoLabel(tipo) {

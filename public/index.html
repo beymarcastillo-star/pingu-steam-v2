@@ -347,12 +347,19 @@
                     </div>
                     <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
                 </div>
-                <div class="setting-row" style="border-bottom:none">
+                <div class="setting-row">
                     <div class="setting-info">
                         <h4>Notificaciones de Renovación</h4>
                         <p>Avisar a clientes 3 días antes de vencer</p>
                     </div>
                     <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                </div>
+                <div class="setting-row" style="border-bottom:none">
+                    <div class="setting-info">
+                        <h4>Responder en Grupos</h4>
+                        <p>El bot participa en grupos de WhatsApp donde esté agregado</p>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="switchGrupos" onchange="toggleGrupos(this.checked)"><span class="slider"></span></label>
                 </div>
                 <div class="input-group" style="margin-top:24px">
                     <label>Prompt del sistema (comportamiento de la IA)</label>

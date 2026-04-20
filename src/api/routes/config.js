@@ -14,19 +14,21 @@ router.get('/public', (_req, res) => {
         tipo_cambio:    getConfig('tipo_cambio') || '6.96',
         prompt_sistema: getConfig('saludo_bot'),
         color_primario: getConfig('color_primario'),
-        admin_number:   process.env.ADMIN_NUMBER || null
+        admin_number:   process.env.ADMIN_NUMBER || null,
+        grupos_activo:  getConfig('grupos_activo') || '0'
     });
 });
 
 // POST /api/config — guardar configuración
 router.post('/', (req, res) => {
-    const { nombre_empresa, nombre_bot, moneda, tipo_cambio, prompt_sistema, logo } = req.body;
-    if (nombre_empresa) setConfig('nombre_empresa', nombre_empresa);
-    if (nombre_bot)     setConfig('nombre_bot', nombre_bot);
-    if (moneda)         setConfig('moneda', moneda);
-    if (tipo_cambio)    setConfig('tipo_cambio', tipo_cambio);
-    if (prompt_sistema) setConfig('saludo_bot', prompt_sistema);
-    if (logo)           setConfig('logo', logo);
+    const { nombre_empresa, nombre_bot, moneda, tipo_cambio, prompt_sistema, logo, grupos_activo } = req.body;
+    if (nombre_empresa)              setConfig('nombre_empresa', nombre_empresa);
+    if (nombre_bot)                  setConfig('nombre_bot', nombre_bot);
+    if (moneda)                      setConfig('moneda', moneda);
+    if (tipo_cambio)                 setConfig('tipo_cambio', tipo_cambio);
+    if (prompt_sistema)              setConfig('saludo_bot', prompt_sistema);
+    if (logo)                        setConfig('logo', logo);
+    if (grupos_activo !== undefined) setConfig('grupos_activo', grupos_activo ? '1' : '0');
     res.json({ ok: true });
 });
 

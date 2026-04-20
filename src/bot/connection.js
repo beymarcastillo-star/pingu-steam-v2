@@ -114,9 +114,12 @@ async function conectar(io) {
         if (type !== 'notify') return;
         const msg = messages[0];
         if (!msg || msg.key.fromMe) return;
-        // Ignorar estados de WhatsApp y mensajes de grupos
         const jid = msg.key.remoteJid || '';
-        if (jid.includes('@g.us') || jid.includes('status@broadcast') || jid === 'status') return;
+        if (jid.includes('status@broadcast') || jid === 'status') return;
+        if (jid.includes('@g.us')) {
+            const db = require('../db/database');
+            if (db.getConfig('grupos_activo', '0') !== '1') return;
+        }
         try { await procesarMensaje(msg); }
         catch (e) { console.error('Error al procesar mensaje:', e.message); }
     });

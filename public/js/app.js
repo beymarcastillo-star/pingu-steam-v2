@@ -801,9 +801,8 @@ async function cargarConversaciones() {
 }
 
 function formatearWA(numero) {
-    // Bolivia: 591 + 8 dígitos → mostrar solo los 8 locales
-    if (/^591\d{8}$/.test(numero)) return `+591 ${numero.slice(3)}`;
-    // Otros: mostrar con + si tiene 10+ dígitos (número real)
+    if (!numero || !/^\d+$/.test(numero)) return null; // no es número real
+    if (/^591\d{8}$/.test(numero)) return `+591 ${numero.slice(3)}`; // Bolivia
     if (numero.length >= 10) return `+${numero}`;
     return numero;
 }
@@ -812,7 +811,8 @@ async function verHilo(numero, nombre) {
     _hiloNumeroActual = numero;
     document.getElementById('hiloTitulo').textContent = nombre;
     const hiloNum = document.getElementById('hiloNumero');
-    if (hiloNum) hiloNum.textContent = `📱 ${formatearWA(numero)}`;
+    const waFmt = formatearWA(numero);
+    if (hiloNum) hiloNum.textContent = waFmt ? `📱 ${waFmt}` : '';
     document.getElementById('hiloBorrarBtn').dataset.numero = numero;
 
     const msgs = await api(`/conversaciones/${numero}`);

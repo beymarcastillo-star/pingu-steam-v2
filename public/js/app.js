@@ -800,11 +800,19 @@ async function cargarConversaciones() {
     }).join('');
 }
 
+function formatearWA(numero) {
+    // Bolivia: 591 + 8 dígitos → mostrar solo los 8 locales
+    if (/^591\d{8}$/.test(numero)) return `+591 ${numero.slice(3)}`;
+    // Otros: mostrar con + si tiene 10+ dígitos (número real)
+    if (numero.length >= 10) return `+${numero}`;
+    return numero;
+}
+
 async function verHilo(numero, nombre) {
     _hiloNumeroActual = numero;
     document.getElementById('hiloTitulo').textContent = nombre;
     const hiloNum = document.getElementById('hiloNumero');
-    if (hiloNum) hiloNum.textContent = `📱 +${numero}`;
+    if (hiloNum) hiloNum.textContent = `📱 ${formatearWA(numero)}`;
     document.getElementById('hiloBorrarBtn').dataset.numero = numero;
 
     const msgs = await api(`/conversaciones/${numero}`);

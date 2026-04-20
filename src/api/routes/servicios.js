@@ -1,9 +1,10 @@
-const router = require('express').Router();
-const db     = require('../../db/database');
+const router    = require('express').Router();
+const db        = require('../../db/database');
+const getConfig = db.getConfig;
 
 // GET /api/servicios
 router.get('/', (_req, res) => {
-    const tc = parseFloat(db.prepare("SELECT valor FROM config WHERE clave = 'tipo_cambio'").get()?.valor || 6.96);
+    const tc = parseFloat(getConfig('tipo_cambio', '6.96'));
     const servicios = db.prepare(`
         SELECT s.*,
                COUNT(CASE WHEN p.estado = 'libre' THEN 1 END) as libres

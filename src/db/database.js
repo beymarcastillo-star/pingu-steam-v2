@@ -25,9 +25,16 @@ const migraciones = [
     `ALTER TABLE servicios ADD COLUMN costo_usd    REAL`,
     `ALTER TABLE servicios ADD COLUMN precio_usd   REAL`,
     `ALTER TABLE servicios ADD COLUMN margen_minimo REAL NOT NULL DEFAULT 20`,
+    // Indexes para DBs creadas antes de que se añadieran al schema
+    `CREATE INDEX IF NOT EXISTS idx_clientes_wa      ON clientes(whatsapp)`,
+    `CREATE INDEX IF NOT EXISTS idx_pedidos_estado   ON pedidos(estado)`,
+    `CREATE INDEX IF NOT EXISTS idx_pedidos_cliente  ON pedidos(cliente_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_perfiles_cuenta  ON perfiles(cuenta_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_perfiles_estado  ON perfiles(estado)`,
+    `CREATE INDEX IF NOT EXISTS idx_cuentas_servicio ON cuentas(servicio_id)`,
 ];
 for (const sql of migraciones) {
-    try { db.exec(sql); } catch (_) { /* columna ya existe, ignorar */ }
+    try { db.exec(sql); } catch (_) { /* ya existe, ignorar */ }
 }
 
 // Valores de config que pueden no existir aún
@@ -48,4 +55,10 @@ for (const [clave, valor] of configExtras) insertConfig.run(clave, valor);
 
 console.log('✅ Base de datos lista:', DB_PATH);
 
+const _stmtConfig = db.prepare('SELECT valor FROM config WHERE clave = ?');
+function getConfig(clave, def = '') {
+    return _stmtConfig.get(clave)?.valor || def;
+}
+
 module.exports = db;
+module.exports.getConfig = getConfig;

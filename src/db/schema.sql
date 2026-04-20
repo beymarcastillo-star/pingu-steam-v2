@@ -126,8 +126,14 @@ CREATE TABLE IF NOT EXISTS conversaciones (
     estado      TEXT NOT NULL DEFAULT 'auto',    -- 'auto' | 'humano'
     fecha       TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_conv_numero ON conversaciones(numero);
-CREATE INDEX IF NOT EXISTS idx_conv_fecha  ON conversaciones(fecha);
+CREATE INDEX IF NOT EXISTS idx_conv_numero      ON conversaciones(numero);
+CREATE INDEX IF NOT EXISTS idx_conv_fecha       ON conversaciones(fecha);
+CREATE INDEX IF NOT EXISTS idx_clientes_wa      ON clientes(whatsapp);
+CREATE INDEX IF NOT EXISTS idx_pedidos_estado   ON pedidos(estado);
+CREATE INDEX IF NOT EXISTS idx_pedidos_cliente  ON pedidos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_perfiles_cuenta  ON perfiles(cuenta_id);
+CREATE INDEX IF NOT EXISTS idx_perfiles_estado  ON perfiles(estado);
+CREATE INDEX IF NOT EXISTS idx_cuentas_servicio ON cuentas(servicio_id);
 
 -- Datos iniciales de configuración
 INSERT OR IGNORE INTO config (clave, valor) VALUES

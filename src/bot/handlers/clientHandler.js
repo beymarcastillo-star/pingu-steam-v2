@@ -11,30 +11,37 @@ function logMensaje(db, numero, nombre, mensaje, origen, estado = 'auto') {
     try {
         db.prepare(`INSERT INTO conversaciones (numero, nombre, mensaje, origen, estado)
                     VALUES (?, ?, ?, ?, ?)`).run(numero, nombre, mensaje, origen, estado);
-        // Lazy require para evitar dependencia circular con connection.js
-        const { emitirAdmin } = require('../connection');
+        const { emitirAdmin } = require('../connection'); // lazy: evita circular dep
         emitirAdmin('nueva-conversacion', { numero, nombre, mensaje, origen, estado,
             fecha: new Date().toISOString() });
-    } catch (_) {}
+    } catch (e) { console.error('logMensaje:', e.message); }
 }
 
-// Sesiones en memoria: { estado, servicioId, servicioNombre, cantidad, pedidoId }
+// Sesiones en memoria: { estado, servicioId, servicioNombre, cantidad, pedidoId, _ts }
 const sesiones = {};
+const SESSION_TTL = 30 * 60 * 1000; // 30 min
+
+setInterval(() => {
+    const now = Date.now();
+    for (const num of Object.keys(sesiones)) {
+        if (now - (sesiones[num]._ts || 0) > SESSION_TTL) delete sesiones[num];
+    }
+}, 10 * 60 * 1000).unref();
 
 function getSesion(numero) {
-    if (!sesiones[numero]) sesiones[numero] = { estado: 'inicio' };
+    if (!sesiones[numero]) sesiones[numero] = { estado: 'inicio', _ts: Date.now() };
     return sesiones[numero];
 }
 function setSesion(numero, data) {
-    sesiones[numero] = { ...sesiones[numero], ...data };
+    sesiones[numero] = { ...sesiones[numero], ...data, _ts: Date.now() };
 }
 function resetSesion(numero) {
-    sesiones[numero] = { estado: 'inicio' };
+    sesiones[numero] = { estado: 'inicio', _ts: Date.now() };
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function getConfig(db, clave, def = '') {
-    return db.prepare('SELECT valor FROM config WHERE clave = ?').get(clave)?.valor || def;
+    return require('../../db/database').getConfig(clave, def);
 }
 
 function registrarCliente(db, numero, nombre) {

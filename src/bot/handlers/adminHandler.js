@@ -15,7 +15,7 @@ function resetSesion(numero) {
 }
 
 function getConfig(db, clave, def = '') {
-    return db.prepare('SELECT valor FROM config WHERE clave = ?').get(clave)?.valor || def;
+    return require('../../db/database').getConfig(clave, def);
 }
 
 // ── MENÚS ─────────────────────────────────────────────────────────────────

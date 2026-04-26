@@ -174,8 +174,8 @@ async function procesarMensaje(msg) {
     const esImagen = !!(content.imageMessage || content.documentMessage);
     const admin    = db.prepare('SELECT * FROM admins WHERE telefono = ? AND activo = 1').get(numero);
 
-    if (admin)         await adminHandler.manejar({ sock, jid, texto, numero, nombre, adminRow: admin, db });
-    else if (esImagen) await clientHandler.manejarImagen({ sock, jid, numero, nombre, db });
+    if (admin)         await adminHandler.manejar({ sock, jid, texto, numero, nombre, adminRow: admin, db, msg });
+    else if (esImagen) await clientHandler.manejarImagen({ sock, jid, msg, numero, nombre, db });
     else               await clientHandler.manejar({ sock, jid, texto, numero, nombre, db });
 }
 

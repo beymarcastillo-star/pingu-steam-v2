@@ -631,6 +631,9 @@ tr:last-child td { border-bottom: none; }
 .modal {
     background: #0e0e14;
     border: 1px solid var(--glass-border);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     border-radius: 20px;
     padding: 28px;
     width: 100%;
@@ -638,11 +641,58 @@ tr:last-child td { border-bottom: none; }
     box-shadow: 0 24px 64px rgba(0,0,0,0.6);
     animation: fadeIn 0.3s ease;
 }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-shrink: 0; }
 .modal-title  { font-size: 18px; font-weight: 700; }
 .modal-close  { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
 .modal-close:hover { color: white; }
-.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.modal-body   { flex: 1; overflow-y: auto; padding-right: 4px; margin-right: -4px; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
+
+/* ── PERFIL ROWS (modal agregar cuenta) ──── */
+.perfil-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+.perfil-row-num {
+    min-width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.perfil-row input {
+    flex: 1;
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: white;
+    font-size: 13px;
+    font-family: inherit;
+}
+.perfil-row input:focus { outline: none; border-color: var(--accent); }
+.perfil-row-del {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.perfil-row-del:hover { background: rgba(255,82,82,.15); }
 
 /* ── UPLOAD AREA ─────────────────────────── */
 .upload-area {

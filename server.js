@@ -57,3 +57,6 @@ httpServer.listen(PORT, () => {
 // ── ARRANCAR BOT WHATSAPP ─────────────────
 const bot = require('./src/bot/connection');
 bot.conectar(io);
+
+// ── JOBS EN SEGUNDO PLANO ─────────────────
+require('./src/jobs/recordatorios').start();

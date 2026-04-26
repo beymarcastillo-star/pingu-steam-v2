@@ -25,6 +25,15 @@ const migraciones = [
     `ALTER TABLE servicios ADD COLUMN costo_usd    REAL`,
     `ALTER TABLE servicios ADD COLUMN precio_usd   REAL`,
     `ALTER TABLE servicios ADD COLUMN margen_minimo REAL NOT NULL DEFAULT 20`,
+    // Columnas para el flujo de aprobación por WhatsApp
+    `ALTER TABLE pedidos ADD COLUMN tomado_por        INTEGER`,
+    `ALTER TABLE pedidos ADD COLUMN tomado_en         TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN comprobante_imagen TEXT`,
+    `ALTER TABLE pedidos ADD COLUMN ai_analisis        TEXT`,
+    // Columna para recordatorios de vencimiento
+    `ALTER TABLE perfiles ADD COLUMN recordatorio_enviado TEXT`,
+    // Cantidad de perfiles por cuenta (para calcular ganancia real)
+    `ALTER TABLE servicios ADD COLUMN perfiles_por_cuenta INTEGER NOT NULL DEFAULT 1`,
     // Indexes para DBs creadas antes de que se añadieran al schema
     `CREATE INDEX IF NOT EXISTS idx_clientes_wa      ON clientes(whatsapp)`,
     `CREATE INDEX IF NOT EXISTS idx_pedidos_estado   ON pedidos(estado)`,
@@ -56,6 +65,10 @@ const configExtras = [
     ['descuento_puntos_bajo',  '5'],
     ['descuento_puntos_medio', '15'],
     ['descuento_puntos_alto',  '35'],
+    ['vision_ia_activo',              '1'],
+    ['recordatorios_activo',          '1'],
+    ['recordatorios_dias',            '3'],
+    ['recordatorio_mensaje_cliente',  '🔔 Hola *{nombre}*! Tu suscripción de *{servicio}* vence el *{fecha}* ({dias} días).\n\nEscribe *menu* para renovar y no perder el acceso 😊'],
 ];
 const insertConfig = db.prepare('INSERT OR IGNORE INTO config (clave, valor) VALUES (?, ?)');
 for (const [clave, valor] of configExtras) insertConfig.run(clave, valor);

@@ -81,6 +81,20 @@ function calcularDescuento(cantidad) {
     return { pct: 0, label: null };
 }
 
+function calcularDescuentoPuntos(db, pts) {
+    const umbralAlto  = parseInt(getConfig(db, 'puntos_umbral_alto',  '200'));
+    const umbralMedio = parseInt(getConfig(db, 'puntos_umbral_medio', '100'));
+    const umbralBajo  = parseInt(getConfig(db, 'puntos_umbral_bajo',  '50'));
+    const descAlto    = parseInt(getConfig(db, 'descuento_puntos_alto',  '35'));
+    const descMedio   = parseInt(getConfig(db, 'descuento_puntos_medio', '15'));
+    const descBajo    = parseInt(getConfig(db, 'descuento_puntos_bajo',  '5'));
+
+    if (pts >= umbralAlto)  return { pct: descAlto,  umbralUsado: umbralAlto,  umbralBajo };
+    if (pts >= umbralMedio) return { pct: descMedio, umbralUsado: umbralMedio, umbralBajo };
+    if (pts >= umbralBajo)  return { pct: descBajo,  umbralUsado: umbralBajo,  umbralBajo };
+    return { pct: 0, umbralUsado: 0, umbralBajo };
+}
+
 function formatearPrecio(usd, bs) {
     if (!usd) return 'precio a consultar';
     return `$${usd.toFixed(2)} USD / Bs ${bs?.toFixed(2) ?? '—'}`;
@@ -95,12 +109,20 @@ function notificarAdmin(sock, db, texto) {
 }
 
 function sumarPuntos(db, clienteId, monto_bs) {
-    let puntos = 5;
-    if (monto_bs > 100) puntos = 30;
-    else if (monto_bs > 50) puntos = 15;
+    const umbralAlto  = parseInt(getConfig(db, 'puntos_umbral_alto',  '200'));
+    const umbralMedio = parseInt(getConfig(db, 'puntos_umbral_medio', '100'));
+    const umbralBajo  = parseInt(getConfig(db, 'puntos_umbral_bajo',  '50'));
+    const ptsAlto     = parseInt(getConfig(db, 'puntos_por_compra_alta',  '30'));
+    const ptsMedio    = parseInt(getConfig(db, 'puntos_por_compra_media', '15'));
+    const ptsBajo     = parseInt(getConfig(db, 'puntos_por_compra_baja',  '5'));
+
+    let puntos = ptsBajo;
+    if (monto_bs >= umbralAlto)  puntos = ptsAlto;
+    else if (monto_bs >= umbralMedio) puntos = ptsMedio;
+    else if (monto_bs >= umbralBajo)  puntos = ptsBajo;
 
     db.transaction(() => {
-        db.prepare('UPDATE clientes SET puntos = puntos + ? WHERE id = ?').run(puntos, clienteId);
+        db.prepare('UPDATE clientes SET puntos = puntos + ?, total_compras = total_compras + 1 WHERE id = ?').run(puntos, clienteId);
         db.prepare(`INSERT INTO puntos_historial (cliente_id, tipo, cantidad, motivo)
                     VALUES (?, 'ganado', ?, 'Compra confirmada')`).run(clienteId, puntos);
     })();
@@ -196,12 +218,12 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
 
     if (['mis puntos', 'puntos', 'mis pts'].includes(t)) {
         const pts = cliente?.puntos || 0;
-        const descuentoDisponible = pts >= 200 ? 35 : pts >= 100 ? 15 : pts >= 50 ? 5 : 0;
+        const { pct: descuentoPct, umbralBajo } = calcularDescuentoPuntos(db, pts);
         let msg = `⭐ *Tus puntos acumulados: ${pts}*\n\n`;
-        if (descuentoDisponible > 0) {
-            msg += `🎁 ¡Puedes canjear Bs ${descuentoDisponible} de descuento!\nEscribe *canjear* para aplicarlo en tu próxima compra.`;
+        if (descuentoPct > 0) {
+            msg += `🎁 ¡Tienes un descuento de *${descuentoPct}%* disponible!\nEscribe *canjear* para aplicarlo en tu próxima compra.`;
         } else {
-            const falta = 50 - pts;
+            const falta = umbralBajo - pts;
             msg += `Acumula *${falta > 0 ? falta : 0} puntos más* para obtener tu primer descuento 💪\n\n`;
             msg += `_Ganas puntos en cada compra que realices._`;
         }
@@ -212,6 +234,22 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
         const servicios = getServicios(db);
         setSesion(numero, { estado: 'catalogo', servicios });
         return responder(msgCatalogo(servicios));
+    }
+
+    if (t === 'canjear') {
+        const pts = cliente?.puntos || 0;
+        const { pct, umbralUsado, umbralBajo } = calcularDescuentoPuntos(db, pts);
+        if (pct === 0) {
+            const falta = umbralBajo - pts;
+            return responder(`❌ No tienes suficientes puntos.\nTe faltan *${falta > 0 ? falta : 0}* puntos para tu primer descuento 💪`);
+        }
+        setSesion(numero, { estado: 'canjear_confirmar', descuentoPct: pct, umbralUsado });
+        return responder(
+            `⭐ Tienes *${pts} puntos*\n` +
+            `🎁 Descuento disponible: *${pct}% off*\n\n` +
+            `*1* — Aplicar en mi próxima compra\n` +
+            `*2* — Guardar para después`
+        );
     }
 
     // ── ESTADO: INICIO ────────────────────────────────────────────────────
@@ -229,9 +267,10 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
         }
         if (t === '2') {
             const pts = cliente?.puntos || 0;
-            const msg = pts >= 50
-                ? `⭐ Tienes *${pts} puntos*!\n🎁 Escribe *canjear* para aplicar un descuento.`
-                : `⭐ Tienes *${pts} puntos*.\nAcumula ${50 - pts} más para tu primer descuento 💪`;
+            const { pct: descuentoPct, umbralBajo } = calcularDescuentoPuntos(db, pts);
+            const msg = descuentoPct > 0
+                ? `⭐ Tienes *${pts} puntos*!\n🎁 Tienes un descuento de *${descuentoPct}%* disponible.\nEscribe *canjear* para aplicarlo.`
+                : `⭐ Tienes *${pts} puntos*.\nAcumula ${umbralBajo - pts} más para tu primer descuento 💪`;
             setSesion(numero, { estado: 'menu' });
             return responder(msg);
         }
@@ -286,20 +325,24 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
         if (metodo) {
             const s    = sesion.servicio;
             const cant = sesion.cantidad || 1;
-            const { pct } = calcularDescuento(cant);
-            const precioUnitario   = s.precio_usd ? +(s.precio_usd * (1 - pct / 100)).toFixed(2) : null;
-            const precioUnitarioBs = s.precio_bs  ? +(s.precio_bs  * (1 - pct / 100)).toFixed(2) : null;
+            const { pct: pctVolumen } = calcularDescuento(cant);
+            const pctPuntos = sesion.descuentoPuntos || 0;
+            const factorDesc = (1 - pctVolumen / 100) * (1 - pctPuntos / 100);
+            const precioUnitario   = s.precio_usd ? +(s.precio_usd * factorDesc).toFixed(2) : null;
+            const precioUnitarioBs = s.precio_bs  ? +(s.precio_bs  * factorDesc).toFixed(2) : null;
             const totalUsd = precioUnitario   ? +(precioUnitario   * cant).toFixed(2) : null;
             const totalBs  = precioUnitarioBs ? +(precioUnitarioBs * cant).toFixed(2) : null;
 
             const pedido = db.prepare(`INSERT INTO pedidos (cliente_id, servicio_id, metodo_pago, notas)
                 VALUES (?, ?, ?, ?)`).run(cliente.id, s.id, metodo.nombre,
-                `${cant}x ${s.nombre} | Total: $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}`);
+                `${cant}x ${s.nombre} | Total: Bs ${totalBs ?? '?'}${pctPuntos > 0 ? ` (incl. ${pctPuntos}% desc. puntos)` : ''}`);
 
             setSesion(numero, { estado: 'comprobante', pedidoId: pedido.lastInsertRowid, totalBs, totalUsd });
 
             let resumen = `✅ *Resumen del pedido #${pedido.lastInsertRowid}*\n🎬 ${cant}x ${s.nombre}\n`;
-            if (totalUsd) resumen += `💰 Total: *$${totalUsd} / Bs ${totalBs}*\n`;
+            if (pctVolumen > 0) resumen += `🎁 Desc. volumen: *${pctVolumen}%*\n`;
+            if (pctPuntos  > 0) resumen += `⭐ Desc. puntos:  *${pctPuntos}%*\n`;
+            if (totalBs)   resumen += `💰 Total: *Bs ${totalBs}*\n`;
             resumen += `💳 Método: *${metodo.nombre}*`;
 
             notificarAdmin(sock, db, `🛒 Nuevo pedido #${pedido.lastInsertRowid}\n👤 ${nombre} (${numero})\n🎬 ${cant}x ${s.nombre}\n💰 $${totalUsd ?? '?'} / Bs ${totalBs ?? '?'}\n💳 ${metodo.nombre}`);
@@ -326,16 +369,38 @@ async function manejar({ sock, jid, texto, numero, nombre, db }) {
     // ── ESTADO: COMPROBANTE ───────────────────────────────────────────────
     if (sesion.estado === 'comprobante') {
         const confirma = ['ya pagué', 'ya pague', 'pagué', 'pague', 'listo', 'hecho', 'ya envié', 'ya envie'].some(k => t.includes(k));
-        if (sesion._tieneImagen || confirma) {
-            const pts = sumarPuntos(db, cliente.id, sesion.totalBs || 0);
+        if (confirma) {
+            // Sin imagen: notificar admins con texto y mover a espera
             if (sesion.pedidoId) {
-                db.prepare("UPDATE pedidos SET notas = notas || ' | Comprobante recibido' WHERE id = ?").run(sesion.pedidoId);
+                db.prepare("UPDATE pedidos SET notas = notas || ' | Cliente confirmó pago (sin imagen)' WHERE id = ?").run(sesion.pedidoId);
             }
-            notificarAdmin(sock, db, `💸 Comprobante recibido del pedido #${sesion.pedidoId}\n👤 ${nombre} (${numero})\nPor favor verificar y entregar acceso.`);
-            resetSesion(numero);
-            return responder(`✅ ¡Comprobante recibido! Un asesor verificará tu pago y te enviará los accesos en breve 🚀\n\n⭐ *+${pts} puntos* agregados a tu cuenta!\n\nEscribe *mis puntos* para ver tu saldo 😊`);
+            notificarAdmin(sock, db,
+                `💸 *PEDIDO #${sesion.pedidoId} — Cliente confirmó pago* (sin imagen)\n` +
+                `👤 ${nombre} (${numero})\nVerificar manualmente.`
+            );
+            setSesion(numero, { estado: 'esperando_aprobacion' });
+            return responder('✅ Recibido. Un asesor verificará tu pago y te enviará los accesos pronto ⏳');
         }
-        return responder('📸 Envía la imagen del comprobante de pago para confirmar tu pedido.\nSi ya pagaste, escribe *ya pagué*.');
+        return responder('📸 Envía la *imagen* del comprobante de pago.\nO escribe *ya pagué* si ya realizaste la transferencia.');
+    }
+
+    // ── ESTADO: ESPERANDO APROBACIÓN ─────────────────────────────────────
+    if (sesion.estado === 'esperando_aprobacion') {
+        return responder('⏳ Tu pago está siendo verificado. Un asesor lo aprobará en breve.\n\nEscribe *menu* si deseas volver al inicio.');
+    }
+
+    // ── ESTADO: CANJEAR CONFIRMAR ─────────────────────────────────────────
+    if (sesion.estado === 'canjear_confirmar') {
+        if (t === '1') {
+            const servicios = getServicios(db);
+            setSesion(numero, { estado: 'catalogo', servicios, descuentoPuntos: sesion.descuentoPct, umbralUsado: sesion.umbralUsado });
+            return responder(`✅ Descuento del *${sesion.descuentoPct}%* activado 🎁\n\nElige el servicio:\n\n${msgCatalogo(servicios)}`);
+        }
+        if (t === '2') {
+            resetSesion(numero);
+            return responder('👍 Tus puntos están guardados. Escribe *canjear* cuando quieras usarlos.\n\nEscribe *menu* para volver al inicio.');
+        }
+        return responder(`*1* — Aplicar ahora\n*2* — Guardar para después`);
     }
 
     // ── ESTADO: HUMANO ────────────────────────────────────────────────────
@@ -368,11 +433,84 @@ function enviar(sock, jid, texto) {
 }
 
 // Llamado desde connection.js cuando llega una imagen
-async function manejarImagen({ sock, jid, numero, nombre, db }) {
+async function manejarImagen({ sock, jid, msg, numero, nombre, db }) {
     const sesion = getSesion(numero);
-    if (sesion.estado === 'comprobante') {
-        setSesion(numero, { _tieneImagen: true });
-        await manejar({ sock, jid, texto: 'ya pagué', numero, nombre, db });
+    if (sesion.estado !== 'comprobante') return;
+
+    const pedidoId = sesion.pedidoId;
+
+    // Responder al cliente de inmediato
+    await enviar(sock, jid, '📸 Comprobante recibido. Un asesor verificará tu pago y te enviará los accesos en breve ⏳');
+    logMensaje(db, numero, nombre, '📸 Comprobante recibido. Un asesor verificará tu pago y te enviará los accesos en breve ⏳', 'bot');
+    setSesion(numero, { estado: 'esperando_aprobacion' });
+
+    // Descargar imagen y procesar en background
+    try {
+        const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+        const buffer = await downloadMediaMessage(msg, 'buffer', {});
+
+        // Guardar imagen en disco
+        const imgDir = path.join(IMG_PATH, 'comprobantes');
+        fs.mkdirSync(imgDir, { recursive: true });
+        const imgFilename = `pedido_${pedidoId}.jpg`;
+        fs.writeFileSync(path.join(imgDir, imgFilename), buffer);
+        db.prepare("UPDATE pedidos SET comprobante_imagen = ? WHERE id = ?").run(imgFilename, pedidoId);
+
+        // Analizar con IA (si está habilitado en config)
+        const { analizarComprobante } = require('../../services/aiService');
+        const visionActivo = getConfig(db, 'vision_ia_activo', '1') === '1';
+        const analisis = visionActivo
+            ? await analizarComprobante(buffer, sesion.totalBs)
+            : { banco: null, monto: null, fecha: null, valido: null, coincide: null, nota: 'Análisis IA desactivado' };
+        db.prepare("UPDATE pedidos SET ai_analisis = ? WHERE id = ?").run(JSON.stringify(analisis), pedidoId);
+        db.prepare("UPDATE pedidos SET notas = notas || ' | Comprobante recibido' WHERE id = ?").run(pedidoId);
+
+        // Construir resumen para admins
+        const pedido   = db.prepare('SELECT * FROM pedidos WHERE id = ?').get(pedidoId);
+        const servicio = db.prepare('SELECT nombre FROM servicios WHERE id = ?').get(pedido?.servicio_id);
+
+        const coincideIcon = analisis.coincide === true  ? '✅' :
+                             analisis.coincide === false ? '⚠️' : '❓';
+        const validoIcon   = analisis.valido   === true  ? '✅' :
+                             analisis.valido   === false ? '🚨' : '❓';
+
+        let bloqueIA = '';
+        if (analisis.banco || analisis.monto) {
+            bloqueIA =
+                `\n🤖 *Análisis IA:*\n` +
+                `  Banco: ${analisis.banco || '?'}\n` +
+                `  Monto: Bs ${analisis.monto ?? '?'} ${coincideIcon}\n` +
+                `  Fecha: ${analisis.fecha || '?'}\n` +
+                `  Válido: ${validoIcon}\n` +
+                (analisis.nota ? `  Nota: _${analisis.nota}_\n` : '');
+        } else if (analisis.nota) {
+            bloqueIA = `\n🤖 _IA: ${analisis.nota}_\n`;
+        }
+
+        const resumenAdmin =
+            `🛒 *PEDIDO #${pedidoId} — COMPROBANTE*\n` +
+            `👤 ${nombre} (${numero})\n` +
+            `🎬 ${servicio?.nombre || '?'} · Bs ${sesion.totalBs ?? '?'}\n` +
+            `💳 ${pedido?.metodo_pago || '?'}` +
+            bloqueIA +
+            `\n*1* — Tomar este pedido\n*2* — Ignorar`;
+
+        // Notificar a todos los admins con la imagen
+        const { setPendingNotification } = require('./adminHandler');
+        const admins = db.prepare('SELECT telefono FROM admins WHERE activo = 1').all();
+        for (const adm of admins) {
+            const adminJid = `${adm.telefono}@s.whatsapp.net`;
+            try {
+                await sock.sendMessage(adminJid, { image: buffer, caption: resumenAdmin });
+                setPendingNotification(adm.telefono, pedidoId);
+            } catch (_) {}
+        }
+    } catch (e) {
+        console.error('Error procesando comprobante:', e.message);
+        // Fallback: notificar sin imagen
+        notificarAdmin(sock, db,
+            `💸 *PEDIDO #${pedidoId}* — Comprobante recibido (no se pudo analizar)\n👤 ${nombre} (${numero})`
+        );
     }
 }
 

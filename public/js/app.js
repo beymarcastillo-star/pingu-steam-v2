@@ -150,7 +150,7 @@ function initSocket() {
     socket.on('nueva-conversacion', () => {
         clearTimeout(_convDebounce);
         _convDebounce = setTimeout(() => {
-            if (document.getElementById('bot-view')?.classList.contains('active-view'))
+            if (document.getElementById('bot-view')?.classList.contains('active'))
                 cargarConversaciones();
         }, 600);
     });
@@ -290,14 +290,13 @@ function renderServiceCard(s, editable) {
 
     // Precios
     let precioHtml = '';
-    if (s.precio_usd) {
+    if (s.precio_bs || s.precio_usd) {
         const margenCls = s.margen_actual !== null
             ? (s.margen_actual < s.margen_minimo ? 'color:var(--danger)' : 'color:var(--success)')
             : '';
         precioHtml = `
             <div class="card-prices">
-                <span class="price-usd">$${s.precio_usd.toFixed(2)}</span>
-                <span class="price-bs">Bs ${s.precio_bs?.toFixed(2) ?? '—'}</span>
+                <span class="price-bs" style="font-size:16px;font-weight:700">${s.precio_bs?.toFixed(2) ?? '—'}</span>
                 ${s.margen_actual !== null ? `<span class="price-margin" style="${margenCls}">${s.margen_actual}% margen</span>` : ''}
             </div>`;
     }
@@ -335,6 +334,7 @@ async function abrirModalServicio() {
     document.getElementById('svcDesc').value      = '';
     document.getElementById('svcPrecioUsd').value = '';
     document.getElementById('svcCostoUsd').value  = '';
+    document.getElementById('svcPerfiles').value  = '1';
     document.getElementById('svcMargen').value    = '20';
     document.getElementById('svcImgPreview').style.display = 'none';
     document.getElementById('svcImgInput').value  = '';
@@ -356,10 +356,12 @@ async function abrirEditarServicio(id) {
     document.getElementById('svcId').value        = id;
     document.getElementById('svcNombre').value    = s.nombre || '';
     document.getElementById('svcDesc').value      = s.descripcion || '';
-    document.getElementById('svcPrecioUsd').value = s.precio_usd || '';
-    document.getElementById('svcCostoUsd').value  = s.costo_usd || '';
-    document.getElementById('svcMargen').value    = s.margen_minimo || 20;
-    document.getElementById('svcTipoCambio').value = s.tipo_cambio || 6.96;
+    const tc = s.tipo_cambio || 6.96;
+    document.getElementById('svcPrecioUsd').value  = s.precio_bs  ? s.precio_bs.toFixed(2) : (s.precio_usd ? (s.precio_usd * tc).toFixed(2) : '');
+    document.getElementById('svcCostoUsd').value   = s.costo_usd  ? (s.costo_usd * tc).toFixed(2) : '';
+    document.getElementById('svcPerfiles').value   = s.perfiles_por_cuenta || 1;
+    document.getElementById('svcMargen').value     = s.margen_minimo || 20;
+    document.getElementById('svcTipoCambio').value = tc;
     document.getElementById('svcImgPreview').style.display = 'none';
     document.getElementById('svcImgInput').value  = '';
     document.getElementById('modalServicioTitulo').textContent = 'Editar servicio';
@@ -368,33 +370,35 @@ async function abrirEditarServicio(id) {
     abrirModal('modalServicio');
 }
 
-// Calcular preview de precios en tiempo real
+// Calcular preview de precios en tiempo real (todo en Bs)
 function calcularPreciosBs() {
-    const precioUsd  = parseFloat(document.getElementById('svcPrecioUsd').value) || 0;
-    const costoUsd   = parseFloat(document.getElementById('svcCostoUsd').value) || 0;
-    const margen     = parseFloat(document.getElementById('svcMargen').value) || 20;
-    const tc         = parseFloat(document.getElementById('svcTipoCambio').value) || 6.96;
-    const preview    = document.getElementById('preciosPreview');
+    const precioBs  = parseFloat(document.getElementById('svcPrecioUsd').value) || 0;
+    const costoBs   = parseFloat(document.getElementById('svcCostoUsd').value)  || 0;
+    const numPerf   = Math.max(1, parseInt(document.getElementById('svcPerfiles').value) || 1);
+    const margen    = parseFloat(document.getElementById('svcMargen').value)    || 20;
+    const preview   = document.getElementById('preciosPreview');
 
-    if (!precioUsd && !costoUsd) { preview.style.display = 'none'; return; }
+    if (!precioBs && !costoBs) { preview.style.display = 'none'; return; }
     preview.style.display = 'block';
 
-    document.getElementById('pvUsd').textContent = precioUsd.toFixed(2);
-    document.getElementById('pvBs').textContent  = (precioUsd * tc).toFixed(2);
+    const ingresoTotal = precioBs * numPerf;
+    const gananciaNeta = costoBs ? ingresoTotal - costoBs : null;
+    // Precio mínimo por perfil para cubrir el costo con el margen mínimo
+    const minPorPerfil = costoBs ? +(costoBs * (1 + margen / 100) / numPerf).toFixed(2) : null;
 
-    const precioMinUsd = costoUsd ? +(costoUsd * (1 + margen / 100)).toFixed(2) : null;
-    document.getElementById('pvMinUsd').textContent = precioMinUsd ? `${precioMinUsd}` : '—';
-    document.getElementById('pvMinBs').textContent  = precioMinUsd ? `${(precioMinUsd * tc).toFixed(2)}` : '—';
+    document.getElementById('pvBs').textContent    = precioBs.toFixed(2);
+    document.getElementById('pvTotal').textContent = ingresoTotal.toFixed(2);
+    document.getElementById('pvMinBs').textContent = minPorPerfil ? minPorPerfil.toFixed(2) : '—';
 
-    if (costoUsd && precioUsd) {
-        const margenReal = ((precioUsd - costoUsd) / costoUsd * 100).toFixed(1);
-        const ok = parseFloat(margenReal) >= margen;
-        const el = document.getElementById('pvMargen');
-        el.textContent = `${margenReal}%`;
-        el.style.color = ok ? 'var(--success)' : 'var(--danger)';
+    const elM = document.getElementById('pvMargen');
+    if (gananciaNeta !== null) {
+        const pct    = (gananciaNeta / costoBs * 100).toFixed(1);
+        const ok     = parseFloat(pct) >= margen;
+        elM.innerHTML = `<span style="font-size:13px;color:var(--text-muted)">Bs ${gananciaNeta.toFixed(2)}</span> <span style="font-size:15px">${pct}%</span>`;
+        elM.style.color = ok ? 'var(--success)' : 'var(--danger)';
     } else {
-        document.getElementById('pvMargen').textContent = '—';
-        document.getElementById('pvMargen').style.color = 'var(--text-muted)';
+        elM.textContent = '—';
+        elM.style.color = 'var(--text-muted)';
     }
 }
 
@@ -428,18 +432,25 @@ async function guardarServicio() {
     const nombre = document.getElementById('svcNombre').value.trim();
     if (!nombre) return mostrarToast('❌ El nombre es obligatorio');
 
-    const id         = document.getElementById('svcId').value;
-    const precioUsd  = parseFloat(document.getElementById('svcPrecioUsd').value) || null;
-    const costoUsd   = parseFloat(document.getElementById('svcCostoUsd').value)  || null;
-    const margen     = parseFloat(document.getElementById('svcMargen').value)    || 20;
+    const id              = document.getElementById('svcId').value;
+    const precioBs        = parseFloat(document.getElementById('svcPrecioUsd').value) || null;
+    const costoBs         = parseFloat(document.getElementById('svcCostoUsd').value)  || null;
+    const margen          = parseFloat(document.getElementById('svcMargen').value)    || 20;
+    const tc              = parseFloat(document.getElementById('svcTipoCambio').value) || 6.96;
+    const perfilesPorCuenta = parseInt(document.getElementById('svcPerfiles').value)  || 1;
 
-    // Validar margen si tiene costo y precio
-    if (precioUsd && costoUsd) {
-        const margenReal = ((precioUsd - costoUsd) / costoUsd * 100);
+    // Validar margen considerando todos los perfiles
+    if (precioBs && costoBs) {
+        const ingresoTotal = precioBs * perfilesPorCuenta;
+        const margenReal   = ((ingresoTotal - costoBs) / costoBs * 100);
         if (margenReal < margen) {
             return mostrarToast(`❌ Precio muy bajo — margen real ${margenReal.toFixed(1)}% < mínimo ${margen}%`);
         }
     }
+
+    // Convertir Bs → USD para guardar en DB
+    const precioUsd = precioBs ? +(precioBs / tc).toFixed(4) : null;
+    const costoUsd  = costoBs  ? +(costoBs  / tc).toFixed(4) : null;
 
     let imagen = null;
     const input = document.getElementById('svcImgInput');
@@ -453,10 +464,11 @@ async function guardarServicio() {
 
     const body = {
         nombre,
-        descripcion:   document.getElementById('svcDesc').value.trim(),
-        precio_usd:    precioUsd,
-        costo_usd:     costoUsd,
-        margen_minimo: margen,
+        descripcion:        document.getElementById('svcDesc').value.trim(),
+        precio_usd:         precioUsd,
+        costo_usd:          costoUsd,
+        margen_minimo:      margen,
+        perfiles_por_cuenta: perfilesPorCuenta,
         ...(imagen ? { imagen } : {})
     };
 
@@ -497,22 +509,84 @@ function renderFilaCuenta(c) {
 }
 
 function abrirModalCuenta() {
+    document.getElementById('cuentaCorreo').value = '';
+    document.getElementById('cuentaPass').value   = '';
+    document.getElementById('cuentaTipo').value   = 'perfil';
+    document.getElementById('perfilesLista').innerHTML = '';
+
     api('/servicios').then(s => {
         document.getElementById('cuentaServicio').innerHTML =
-            s.map(sv => `<option value="${sv.id}">${sv.nombre}</option>`).join('');
+            s.map(sv => `<option value="${sv.id}" data-perfiles="${sv.perfiles_por_cuenta || 1}">${sv.nombre}</option>`).join('');
+        actualizarPerfilesSub(true);
     });
     abrirModal('modalCuenta');
 }
 
+function actualizarPerfilesSub(resetRows = false) {
+    const tipo  = document.getElementById('cuentaTipo').value;
+    const sub   = document.getElementById('perfilesSub');
+    const lista = document.getElementById('perfilesLista');
+
+    if (tipo !== 'perfil') {
+        sub.style.display = 'none';
+        lista.innerHTML   = '';
+        return;
+    }
+
+    sub.style.display = '';
+    if (resetRows || !lista.children.length) {
+        const sel = document.getElementById('cuentaServicio');
+        const opt = sel.options[sel.selectedIndex];
+        const n   = parseInt(opt?.dataset.perfiles || '1');
+        lista.innerHTML = '';
+        for (let i = 0; i < n; i++) agregarFilaPerfil();
+    }
+}
+
+function agregarFilaPerfil() {
+    const lista = document.getElementById('perfilesLista');
+    const idx   = lista.children.length + 1;
+    const div   = document.createElement('div');
+    div.className = 'perfil-row';
+    div.innerHTML = `
+        <span class="perfil-row-num">${idx}</span>
+        <input type="text" class="perfil-nombre" placeholder="Nombre del perfil">
+        <input type="text" class="perfil-pin"    placeholder="PIN (opcional)" style="max-width:110px">
+        <button type="button" class="perfil-row-del" onclick="this.closest('.perfil-row').remove();renumerarPerfiles()">✕</button>
+    `;
+    lista.appendChild(div);
+}
+
+function renumerarPerfiles() {
+    document.querySelectorAll('#perfilesLista .perfil-row-num').forEach((el, i) => {
+        el.textContent = i + 1;
+    });
+}
+
 async function guardarCuenta() {
+    const tipo = document.getElementById('cuentaTipo').value;
     const data = {
         servicio_id: parseInt(document.getElementById('cuentaServicio').value),
         correo:      document.getElementById('cuentaCorreo').value.trim(),
         contrasena:  document.getElementById('cuentaPass').value.trim(),
-        tipo:        document.getElementById('cuentaTipo').value
+        tipo,
     };
     if (!data.correo || !data.contrasena) return alert('Completa todos los campos');
-    await api('/cuentas', 'POST', data);
+
+    const res      = await api('/cuentas', 'POST', data);
+    const cuentaId = res.id;
+
+    if (tipo === 'perfil') {
+        const rows = [...document.querySelectorAll('#perfilesLista .perfil-row')];
+        if (!rows.length) return alert('Agrega al menos un perfil');
+        for (const row of rows) {
+            const nombre = row.querySelector('.perfil-nombre').value.trim();
+            const pin    = row.querySelector('.perfil-pin').value.trim();
+            if (!nombre) return alert('Todos los perfiles deben tener nombre');
+            await api('/perfiles', 'POST', { cuenta_id: cuentaId, nombre_perfil: nombre, pin: pin || null });
+        }
+    }
+
     cerrarModal('modalCuenta');
     cargarServicios();
 }
@@ -560,11 +634,12 @@ async function recargarPerfiles(cuentaId) {
             <td>${cliente}</td>
             <td>${vence}</td>
             <td style="color:var(--success);font-weight:600">${p.precio_venta ? 'Bs ' + p.precio_venta : '—'}</td>
-            <td style="display:flex;gap:4px">
+            <td style="display:flex;gap:4px;flex-wrap:wrap">
                 ${p.estado === 'libre'
                     ? `<button class="neon-btn btn-sm" onclick="marcarVendido(${p.id})">Vender</button>`
                     : `<button class="neon-btn btn-sm btn-outline" onclick="liberarPerfil(${p.id})">Liberar</button>`
                 }
+                <button class="neon-btn btn-sm btn-outline" onclick="editarPrecioPerfil(${p.id}, ${p.precio_venta || 0})" title="Editar precio">💰</button>
                 <button class="neon-btn btn-sm btn-danger" onclick="eliminarPerfil(${p.id})">✕</button>
             </td>
         </tr>`;
@@ -585,6 +660,16 @@ async function agregarPerfil() {
     document.getElementById('perfilPrecio').value = '';
     await recargarPerfiles();
     mostrarToast('✅ Perfil agregado');
+}
+
+async function editarPrecioPerfil(id, precioActual) {
+    const nuevo = prompt('Nuevo precio del perfil (Bs):', precioActual || '');
+    if (nuevo === null) return;
+    const precio = parseFloat(nuevo);
+    if (isNaN(precio) || precio < 0) return mostrarToast('❌ Precio inválido');
+    await api(`/perfiles/${id}`, 'PUT', { precio_venta: precio });
+    await recargarPerfiles();
+    mostrarToast('✅ Precio actualizado');
 }
 
 async function marcarVendido(perfilId) {
@@ -694,7 +779,8 @@ async function cargarVentas() {
 
 // ── ADMINS ────────────────────────────────
 async function cargarAdmins() {
-    const data = await api('/admins');
+    const [data, met] = await Promise.all([api('/admins'), api('/admins/metricas')]);
+
     renderTabla('tablaAdmins', data.admins || [], a => `<tr>
         <td style="font-weight:600">${a.usuario}</td>
         <td style="font-family:monospace">${a.telefono}</td>
@@ -702,6 +788,57 @@ async function cargarAdmins() {
         <td><span class="badge ${a.activo ? 'active' : 'closed'}">${a.activo ? 'Activo' : 'Inactivo'}</span></td>
         <td>${a.rol !== 'super_admin' ? `<button class="neon-btn btn-sm btn-danger" onclick="eliminarAdmin('${a.usuario}')">Eliminar</button>` : '—'}</td>
     </tr>`, 5);
+
+    renderMetricasAdmins(met?.metricas || [], met?.tc || 6.96);
+}
+
+function renderMetricasAdmins(metricas, tc) {
+    const el = document.getElementById('metricasAdmins');
+    if (!el) return;
+    if (!metricas.length) {
+        el.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Sin admins activos</p>`;
+        return;
+    }
+
+    const mesActual = new Date().toLocaleString('es-BO', { month: 'long', year: 'numeric', timeZone: 'America/La_Paz' });
+
+    el.innerHTML = metricas.map(m => {
+        const bsMes  = (m.ventas_mes_usd  * tc).toFixed(2);
+        const bsHoy  = (m.ventas_hoy_usd  * tc).toFixed(2);
+        const bsTot  = (m.ventas_total_usd * tc).toFixed(2);
+        const rolBadge = m.rol === 'super_admin'
+            ? `<span style="font-size:10px;background:rgba(99,102,241,.25);color:#818cf8;padding:2px 7px;border-radius:20px">Super</span>`
+            : `<span style="font-size:10px;background:rgba(255,255,255,.07);color:var(--text-muted);padding:2px 7px;border-radius:20px">Admin</span>`;
+
+        return `<div class="glass-panel" style="padding:18px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
+                <div style="min-width:0">
+                    <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.usuario}</div>
+                    <div style="margin-top:2px">${rolBadge}</div>
+                </div>
+            </div>
+
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${mesActual}</div>
+
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                <span style="font-size:13px;color:var(--text-muted)">Ventas este mes</span>
+                <span style="font-size:15px;font-weight:700;color:var(--accent)">${m.ventas_mes_n}</span>
+            </div>
+            <div style="font-size:20px;font-weight:800;margin-bottom:12px">Bs ${bsMes}</div>
+
+            <div style="border-top:1px solid var(--glass-border);padding-top:10px;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;justify-content:space-between;font-size:12px">
+                    <span style="color:var(--text-muted)">Hoy</span>
+                    <span style="font-weight:600">${m.ventas_hoy_n} venta${m.ventas_hoy_n !== 1 ? 's' : ''} · Bs ${bsHoy}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:12px">
+                    <span style="color:var(--text-muted)">Total histórico</span>
+                    <span style="font-weight:600">${m.ventas_total_n} venta${m.ventas_total_n !== 1 ? 's' : ''} · Bs ${bsTot}</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 async function guardarAdmin() {
@@ -762,10 +899,19 @@ async function cargarBotStats() {
     if (config.horario_inicio) document.getElementById('horarioInicio').value = config.horario_inicio;
     if (config.horario_fin)    document.getElementById('horarioFin').value    = config.horario_fin;
     if (config.horario_mensaje !== undefined) document.getElementById('horarioMensaje').value = config.horario_mensaje;
+
+    const swR = document.getElementById('switchRecordatorios');
+    if (swR) {
+        swR.checked = config.recordatorios_activo !== '0';
+        document.getElementById('recordatoriosPanel').style.display = swR.checked ? 'block' : 'none';
+        if (swR.checked) cargarVencimientos();
+    }
+    if (config.recordatorios_dias)           document.getElementById('recordatorioDias').value    = config.recordatorios_dias;
+    if (config.recordatorio_mensaje_cliente) document.getElementById('recordatorioMensaje').value = config.recordatorio_mensaje_cliente;
 }
 
 async function toggleGrupos(activo) {
-    await api('/config', { method: 'POST', body: JSON.stringify({ grupos_activo: activo }) });
+    await api('/config', 'POST', { grupos_activo: activo });
     document.getElementById('gruposPanel').style.display = activo ? 'block' : 'none';
     if (activo) cargarGrupos();
 }
@@ -802,11 +948,11 @@ async function toggleGrupoPermitido(jid, activo) {
     let lista = JSON.parse(config.grupos_permitidos || '[]');
     if (activo) { if (!lista.includes(jid)) lista.push(jid); }
     else        { lista = lista.filter(j => j !== jid); }
-    await api('/config', { method: 'POST', body: JSON.stringify({ grupos_permitidos: lista }) });
+    await api('/config', 'POST', { grupos_permitidos: lista });
 }
 
 async function guardarOpcionBot(clave, valor) {
-    await api('/config', { method: 'POST', body: JSON.stringify({ [clave]: valor }) });
+    await api('/config', 'POST', { [clave]: valor });
 }
 
 function toggleHorario(activo) {
@@ -820,6 +966,71 @@ async function guardarHorario() {
         horario_fin:     document.getElementById('horarioFin').value,
         horario_mensaje: document.getElementById('horarioMensaje').value
     })});
+}
+
+function toggleRecordatorios(activo) {
+    document.getElementById('recordatoriosPanel').style.display = activo ? 'block' : 'none';
+    guardarOpcionBot('recordatorios_activo', activo ? '1' : '0');
+    if (activo) cargarVencimientos();
+}
+
+async function guardarRecordatorios() {
+    await api('/config', 'POST', {
+        recordatorios_dias:           document.getElementById('recordatorioDias').value,
+        recordatorio_mensaje_cliente: document.getElementById('recordatorioMensaje').value,
+    });
+    cargarVencimientos();
+}
+
+async function cargarVencimientos() {
+    const dias = document.getElementById('recordatorioDias')?.value || 3;
+    const contenedor = document.getElementById('tablaVencimientos');
+    if (!contenedor) return;
+
+    const perfiles = await api(`/bot/vencimientos?dias=${dias}`);
+    if (!perfiles?.length) {
+        contenedor.innerHTML = `<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0">✅ Ningún perfil vence en los próximos ${dias} días</p>`;
+        return;
+    }
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    const filas = perfiles.map(p => {
+        const vence   = new Date(p.fecha_vencimiento + 'T00:00:00');
+        const dias    = Math.ceil((vence - new Date()) / (1000 * 60 * 60 * 24));
+        const color   = dias <= 1 ? '#ff4d4d' : dias <= 3 ? '#ffaa00' : '#4dff91';
+        const icono   = dias <= 1 ? '🔴' : dias <= 3 ? '🟡' : '🟢';
+        const avisoHoy = p.recordatorio_enviado === hoy ? ' <span style="font-size:10px;color:#aaa">(avisado hoy)</span>' : '';
+        return `<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;
+                    padding:8px 10px;border-radius:8px;margin-bottom:4px;
+                    background:rgba(255,255,255,0.03);border:1px solid var(--glass-border)">
+            <div>
+                <div style="font-size:13px;font-weight:500">${p.cliente_nombre || p.whatsapp || '?'}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${p.servicio_nombre} — ${p.nombre_perfil}</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted)">
+                📅 ${p.fecha_vencimiento}${avisoHoy}
+            </div>
+            <div style="font-size:13px;font-weight:700;color:${color};white-space:nowrap">
+                ${icono} ${dias} día${dias !== 1 ? 's' : ''}
+            </div>
+        </div>`;
+    });
+    contenedor.innerHTML = filas.join('');
+}
+
+async function enviarRecordatoriosAhora(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    try {
+        await api('/bot/recordatorios', 'POST', {});
+        mostrarToast('✅ Recordatorios enviados por WhatsApp');
+        cargarVencimientos();
+    } catch (e) {
+        mostrarToast('❌ Error al enviar recordatorios');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar recordatorios ahora';
+    }
 }
 
 function tipoLabel(tipo) {

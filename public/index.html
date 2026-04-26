@@ -216,7 +216,7 @@
         <!-- Cuentas -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin:36px 0 20px">
             <h3>Cuentas registradas</h3>
-            <button class="neon-btn btn-sm" onclick="abrirModal('modalCuenta')">+ Agregar cuenta</button>
+            <button class="neon-btn btn-sm" onclick="abrirModalCuenta()">+ Agregar cuenta</button>
         </div>
         <div class="glass-panel table-container">
             <table>
@@ -292,6 +292,14 @@
                     <tr><td colspan="5" style="text-align:center;padding:32px">Cargando...</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Métricas de rendimiento por admin -->
+        <div style="margin-top:24px">
+            <h2 style="font-size:16px;font-weight:600;margin-bottom:14px">📊 Rendimiento del mes</h2>
+            <div id="metricasAdmins" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">
+                <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Cargando...</div>
+            </div>
         </div>
     </main>
 
@@ -401,6 +409,42 @@
                         <input type="text" id="horarioMensaje" placeholder="Ej: Nuestro horario es de {inicio} a {fin} 🕐" onchange="guardarHorario()">
                     </div>
                 </div>
+
+                <!-- ── Recordatorios de vencimiento ── -->
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--glass-border);margin-top:8px">
+                    <div>
+                        <strong style="font-size:14px">🔔 Recordatorios de vencimiento</strong>
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Avisa al cliente días antes de que su perfil expire</p>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="switchRecordatorios" onchange="toggleRecordatorios(this.checked)"><span class="slider"></span></label>
+                </div>
+                <div id="recordatoriosPanel" style="display:none;margin:4px 0 16px;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid var(--glass-border)">
+                    <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;margin-bottom:12px;align-items:end">
+                        <div class="input-group" style="margin:0">
+                            <label>Días antes</label>
+                            <input type="number" id="recordatorioDias" min="1" max="14" value="3"
+                                style="text-align:center" onchange="guardarRecordatorios()">
+                        </div>
+                        <div class="input-group" style="margin:0">
+                            <label>Mensaje al cliente</label>
+                            <input type="text" id="recordatorioMensaje"
+                                placeholder="🔔 Hola {nombre}! Tu {servicio} vence el {fecha}..."
+                                onchange="guardarRecordatorios()">
+                        </div>
+                    </div>
+                    <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px">Variables: <code>{nombre}</code> <code>{servicio}</code> <code>{fecha}</code> <code>{dias}</code></p>
+
+                    <!-- Tabla de vencimientos próximos -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <span style="font-size:13px;font-weight:600">Próximos a vencer</span>
+                        <button class="neon-btn" style="padding:4px 12px;font-size:12px"
+                            onclick="enviarRecordatoriosAhora(this)">Enviar recordatorios ahora</button>
+                    </div>
+                    <div id="tablaVencimientos" style="font-size:13px">
+                        <p style="color:var(--text-muted);font-size:12px">Cargando...</p>
+                    </div>
+                </div>
+
                 <div class="input-group" style="margin-top:24px">
                     <label>Prompt del sistema (comportamiento de la IA)</label>
                     <textarea rows="5" id="cfgPrompt" placeholder="Eres {bot}, asistente de {empresa}..."></textarea>
@@ -579,13 +623,18 @@
 
             <!-- Precios -->
             <div class="input-group">
-                <label>💰 Precio de venta (USD)</label>
-                <input type="number" id="svcPrecioUsd" placeholder="ej: 4.50" step="0.01" min="0"
+                <label>💰 Precio de venta (Bs)</label>
+                <input type="number" id="svcPrecioUsd" placeholder="ej: 45.00" step="0.5" min="0"
                        oninput="calcularPreciosBs()">
             </div>
             <div class="input-group">
-                <label>🔒 Costo real (USD) <span style="color:var(--text-muted);font-size:11px">privado</span></label>
-                <input type="number" id="svcCostoUsd" placeholder="ej: 2.00" step="0.01" min="0"
+                <label>🔒 Costo real (Bs) <span style="color:var(--text-muted);font-size:11px">privado</span></label>
+                <input type="number" id="svcCostoUsd" placeholder="ej: 20.00" step="0.5" min="0"
+                       oninput="calcularPreciosBs()">
+            </div>
+            <div class="input-group">
+                <label>👥 Perfiles por cuenta</label>
+                <input type="number" id="svcPerfiles" placeholder="ej: 8" min="1" max="50" value="1"
                        oninput="calcularPreciosBs()">
             </div>
             <div class="input-group">
@@ -593,29 +642,27 @@
                 <input type="number" id="svcMargen" placeholder="20" min="0" max="100" value="20"
                        oninput="calcularPreciosBs()">
             </div>
-            <div class="input-group">
-                <label>Tipo de cambio (Bs/$)</label>
-                <input type="number" id="svcTipoCambio" placeholder="6.96" step="0.01" min="1" readonly
-                       style="opacity:0.6;cursor:not-allowed">
-            </div>
+            <input type="hidden" id="svcTipoCambio" value="6.96">
         </div>
 
         <!-- Preview de precios calculados -->
         <div id="preciosPreview" class="glass-panel" style="padding:14px;border-radius:12px;margin:4px 0 16px;display:none">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
                 <div>
-                    <div style="font-size:11px;color:var(--text-muted)">Precio venta</div>
-                    <div style="font-size:18px;font-weight:700;color:white">
-                        $<span id="pvUsd">0.00</span> <span style="color:var(--text-muted);font-size:13px">/ Bs <span id="pvBs">0.00</span></span>
-                    </div>
+                    <div style="font-size:11px;color:var(--text-muted)">Precio por perfil</div>
+                    <div style="font-size:18px;font-weight:700">Bs <span id="pvBs">0.00</span></div>
                 </div>
                 <div>
-                    <div style="font-size:11px;color:var(--text-muted)">Ganancia</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Ingreso total</div>
+                    <div style="font-size:18px;font-weight:700;color:var(--accent)">Bs <span id="pvTotal">0.00</span></div>
+                </div>
+                <div>
+                    <div style="font-size:11px;color:var(--text-muted)">Ganancia neta</div>
                     <div id="pvMargen" style="font-size:18px;font-weight:700">—</div>
                 </div>
                 <div>
-                    <div style="font-size:11px;color:var(--text-muted)">Precio mínimo seguro</div>
-                    <div style="font-size:13px;color:var(--warning)">$<span id="pvMinUsd">—</span> / Bs <span id="pvMinBs">—</span></div>
+                    <div style="font-size:11px;color:var(--text-muted)">Precio mín. por perfil</div>
+                    <div style="font-size:13px;color:var(--warning)">Bs <span id="pvMinBs">—</span></div>
                 </div>
             </div>
         </div>
@@ -644,24 +691,35 @@
             <h2 class="modal-title">Agregar cuenta</h2>
             <button class="modal-close" onclick="cerrarModal('modalCuenta')">✕</button>
         </div>
-        <div class="input-group">
-            <label>Servicio</label>
-            <select id="cuentaServicio"></select>
-        </div>
-        <div class="input-group">
-            <label>Correo de la cuenta</label>
-            <input type="email" id="cuentaCorreo" placeholder="cuenta@ejemplo.com">
-        </div>
-        <div class="input-group">
-            <label>Contraseña</label>
-            <input type="text" id="cuentaPass" placeholder="contraseña de la cuenta">
-        </div>
-        <div class="input-group">
-            <label>Tipo de venta</label>
-            <select id="cuentaTipo">
-                <option value="perfil">Por perfil (cuenta compartida)</option>
-                <option value="pantalla_completa">Pantalla completa (cuenta entera)</option>
-            </select>
+        <div class="modal-body">
+            <div class="input-group">
+                <label>Servicio</label>
+                <select id="cuentaServicio" onchange="actualizarPerfilesSub(true)"></select>
+            </div>
+            <div class="input-group">
+                <label>Correo de la cuenta</label>
+                <input type="email" id="cuentaCorreo" placeholder="cuenta@ejemplo.com">
+            </div>
+            <div class="input-group">
+                <label>Contraseña</label>
+                <input type="text" id="cuentaPass" placeholder="contraseña de la cuenta">
+            </div>
+            <div class="input-group">
+                <label>Tipo de venta</label>
+                <select id="cuentaTipo" onchange="actualizarPerfilesSub()">
+                    <option value="perfil">Por perfil (cuenta compartida)</option>
+                    <option value="pantalla_completa">Pantalla completa (cuenta entera)</option>
+                </select>
+            </div>
+
+            <!-- Sub-sección: perfiles para cuenta compartida -->
+            <div id="perfilesSub" style="display:none;margin-top:4px;margin-bottom:18px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <label style="margin:0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)">Perfiles a crear</label>
+                    <button type="button" class="neon-btn btn-sm btn-outline" onclick="agregarFilaPerfil()">+ Agregar</button>
+                </div>
+                <div id="perfilesLista" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="neon-btn btn-outline" onclick="cerrarModal('modalCuenta')">Cancelar</button>
